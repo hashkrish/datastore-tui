@@ -1,0 +1,143 @@
+// Package keymap centralizes the vim-style key.Binding sets for each UI mode
+// (browse/detail/edit/filter) and a small chord tracker for two-key
+// sequences like "gg" and "dd" that bubbles/key does not model directly.
+package keymap
+
+import (
+	"time"
+
+	"github.com/charmbracelet/bubbles/key"
+)
+
+// Mode selects which keymap is active; the app model switches modes as the
+// user drills into columns, opens the detail view, or starts editing.
+type Mode int
+
+const (
+	ModeBrowse Mode = iota
+	ModeDetail
+	ModeEdit
+	ModeFilter
+)
+
+// BrowseKeyMap covers the ranger-style Miller-column browsing mode.
+type BrowseKeyMap struct {
+	Up, Down                 key.Binding
+	Left, Right              key.Binding
+	Top, Bottom              key.Binding
+	HalfPageUp, HalfPageDown key.Binding
+	Filter                   key.Binding
+	DeleteMark               key.Binding // first "d" of "dd"
+	Add                      key.Binding
+	Refresh                  key.Binding
+	Open                     key.Binding
+	Quit                     key.Binding
+	Help                     key.Binding
+	PendingG                 key.Binding // first "g" of "gg"
+}
+
+// DefaultBrowseKeyMap returns the standard vim bindings for browse mode.
+func DefaultBrowseKeyMap() BrowseKeyMap {
+	return BrowseKeyMap{
+		Up:           key.NewBinding(key.WithKeys("k", "up"), key.WithHelp("k/↑", "up")),
+		Down:         key.NewBinding(key.WithKeys("j", "down"), key.WithHelp("j/↓", "down")),
+		Left:         key.NewBinding(key.WithKeys("h", "left"), key.WithHelp("h/←", "back")),
+		Right:        key.NewBinding(key.WithKeys("l", "right"), key.WithHelp("l/→", "drill in")),
+		Top:          key.NewBinding(key.WithKeys("g"), key.WithHelp("gg", "top")),
+		Bottom:       key.NewBinding(key.WithKeys("G"), key.WithHelp("G", "bottom")),
+		HalfPageUp:   key.NewBinding(key.WithKeys("ctrl+u"), key.WithHelp("ctrl+u", "half page up")),
+		HalfPageDown: key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("ctrl+d", "half page down")),
+		Filter:       key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
+		DeleteMark:   key.NewBinding(key.WithKeys("d"), key.WithHelp("dd", "delete")),
+		Add:          key.NewBinding(key.WithKeys("o"), key.WithHelp("o", "new entity")),
+		Refresh:      key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "refresh")),
+		Open:         key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open")),
+		Quit:         key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
+		Help:         key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
+	}
+}
+
+// DetailKeyMap covers the property-tree detail/edit-entry mode.
+type DetailKeyMap struct {
+	Up, Down                 key.Binding
+	HalfPageUp, HalfPageDown key.Binding
+	Expand                   key.Binding // l/enter on array or embedded entity: descend
+	Back                     key.Binding // h/esc: back out one nesting level, or to browse
+	Edit                     key.Binding // enter on a scalar leaf: open edit form
+	Retype                   key.Binding // t: change the selected property's data type
+	Filter                   key.Binding // "/" filter the current scope's rows
+	AddItem                  key.Binding // o on an array: append item
+	DeleteItem               key.Binding // dd on an array item: remove it
+	Save                     key.Binding // ctrl+s: commit pending edits
+	Quit                     key.Binding
+}
+
+// DefaultDetailKeyMap returns the standard vim bindings for detail mode.
+func DefaultDetailKeyMap() DetailKeyMap {
+	return DetailKeyMap{
+		Up:           key.NewBinding(key.WithKeys("k", "up"), key.WithHelp("k/↑", "up")),
+		Down:         key.NewBinding(key.WithKeys("j", "down"), key.WithHelp("j/↓", "down")),
+		HalfPageUp:   key.NewBinding(key.WithKeys("ctrl+u"), key.WithHelp("ctrl+u", "half page up")),
+		HalfPageDown: key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("ctrl+d", "half page down")),
+		Expand:       key.NewBinding(key.WithKeys("l", "right", "enter"), key.WithHelp("l/enter", "expand/edit")),
+		Back:         key.NewBinding(key.WithKeys("h", "left", "esc"), key.WithHelp("h/esc", "back")),
+		Edit:         key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "edit")),
+		Retype:       key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "change type")),
+		Filter:       key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
+		AddItem:      key.NewBinding(key.WithKeys("o"), key.WithHelp("o", "add item")),
+		DeleteItem:   key.NewBinding(key.WithKeys("d"), key.WithHelp("dd", "delete item")),
+		Save:         key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "save")),
+		Quit:         key.NewBinding(key.WithKeys("q", "esc"), key.WithHelp("q/esc", "back to browse")),
+	}
+}
+
+// FilterKeyMap covers the in-column "/" incremental filter input.
+type FilterKeyMap struct {
+	Confirm key.Binding
+	Cancel  key.Binding
+}
+
+// DefaultFilterKeyMap returns the standard bindings for filter-input mode.
+func DefaultFilterKeyMap() FilterKeyMap {
+	return FilterKeyMap{
+		Confirm: key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "apply")),
+		Cancel:  key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel")),
+	}
+}
+
+// chordWindow is how long a leading chord key ("g" or "d") stays armed
+// waiting for its second key before it's treated as a stray keystroke.
+const chordWindow = 600 * time.Millisecond
+
+// Chord tracks two-key vim sequences ("gg", "dd") that a flat key.Binding
+// set can't express: it remembers the last chord-starting key pressed and
+// how long ago, so the caller can ask "does this next key complete a chord?"
+type Chord struct {
+	pending rune
+	armedAt time.Time
+}
+
+// Arm records key as the first half of a potential chord.
+func (c *Chord) Arm(key rune) {
+	c.pending = key
+	c.armedAt = time.Now()
+}
+
+// Complete reports whether key completes the currently armed chord (i.e.
+// key == the armed key, pressed within chordWindow), consuming the arm
+// state either way.
+func (c *Chord) Complete(key rune) bool {
+	defer c.Reset()
+	if c.pending == 0 {
+		return false
+	}
+	if time.Since(c.armedAt) > chordWindow {
+		return false
+	}
+	return c.pending == key
+}
+
+// Reset disarms any pending chord.
+func (c *Chord) Reset() {
+	c.pending = 0
+}
