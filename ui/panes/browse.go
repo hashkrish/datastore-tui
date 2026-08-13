@@ -170,9 +170,11 @@ func renderPreviewColumn(e *model.Entity, emptyMessage string, width, height int
 			if i >= visibleRows {
 				break
 			}
+			if i > 0 {
+				b.WriteString("\n")
+			}
 			line := " " + formatRow(row, width-2)
 			b.WriteString(line)
-			b.WriteString("\n")
 		}
 	}
 
@@ -194,13 +196,15 @@ func renderColumn(items []string, selected int, width, height int) string {
 		}
 		end := min(start+visibleRows, len(items))
 		for i := start; i < end; i++ {
+			if i > start {
+				b.WriteString("\n")
+			}
 			row := truncate(items[i], width-2)
 			line := " " + row
 			if i == selected {
 				line = selectedRowStyle.Render(line)
 			}
 			b.WriteString(line)
-			b.WriteString("\n")
 		}
 	}
 
