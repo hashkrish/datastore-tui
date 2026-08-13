@@ -5,6 +5,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/krishnan/datastore-tui/datastore/model"
+	"github.com/krishnan/datastore-tui/datastore/query"
 	"github.com/krishnan/datastore-tui/ui/edit"
 	"github.com/krishnan/datastore-tui/ui/keymap"
 	"github.com/krishnan/datastore-tui/ui/panes"
@@ -73,6 +74,18 @@ func (m *Model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, km.AddItem):
 		return m.startAddItem()
 
+	case key.Matches(msg, km.GoToKey):
+		m.chordD.Reset()
+		return m.followKeyProperty()
+
+	case key.Matches(msg, km.ToggleBookmark):
+		m.chordD.Reset()
+		return m.toggleBookmark()
+
+	case key.Matches(msg, km.ListBookmarks):
+		m.chordD.Reset()
+		return m.startBookmarkList()
+
 	case key.Matches(msg, km.DeleteItem):
 		if m.chordD.Complete('d') {
 			return m.confirmDeleteItem()
@@ -116,7 +129,7 @@ func (m *Model) detailExpand() (tea.Model, tea.Cmd) {
 	// renders for KindNull). Changing its type is a deliberate, separate
 	// action bound to "t" (updateDetail's Retype case), not something a
 	// plain edit should do implicitly.
-	fe, ok := edit.NewFieldEditor(leaf)
+	fe, ok := edit.NewFieldEditor(leaf, m.width)
 	if !ok {
 		return m, nil
 	}
@@ -124,6 +137,149 @@ func (m *Model) detailExpand() (tea.Model, tea.Cmd) {
 	m.editingSegment = row.Segment
 	m.screen = screenEditLeaf
 	return m, fe.Form().Init()
+}
+
+// followKeyProperty implements "ctrl+]" in detail mode: if the selected row
+// is a Key-typed scalar property, looks up and opens the entity it points
+// at.
+func (m *Model) followKeyProperty() (tea.Model, tea.Cmd) {
+	scope, rows, err := m.currentScope()
+	if err != nil || len(rows) == 0 {
+		return m, nil
+	}
+	row := rows[m.detailSelected]
+	if row.IsContainer {
+		return m, nil
+	}
+	leaf, err := panes.LeafRowValue(scope, row)
+	if err != nil || leaf.Kind != model.KindKey || leaf.KeyValue == nil {
+		return m, nil
+	}
+	return m.goToKey(leaf.KeyValue)
+}
+
+// goToKey opens the entity identified by key (fetching it first), deferring
+// to the unsaved-edit confirmation used elsewhere in detail mode if the
+// current entity is dirty.
+func (m *Model) goToKey(key *model.Key) (tea.Model, tea.Cmd) {
+	if key == nil {
+		return m, nil
+	}
+	if m.dirty.Dirty() {
+		m.prevScreen = m.screen
+		m.confirmYes = func(mm *Model) (tea.Model, tea.Cmd) {
+			mm.dirty.Reset()
+			mm.status = "loading..."
+			return mm, lookupKeyCmd(mm.client, key)
+		}
+		m.screen = screenConfirmQuit
+		return m, nil
+	}
+	m.status = "loading..."
+	return m, lookupKeyCmd(m.client, key)
+}
+
+// openEntity opens e in the detail view directly, without a Lookup round
+// trip — used once an entity has already been fetched (a keyLookupMsg
+// result, or a bookmark preview picked from the picker).
+func (m *Model) openEntity(e *model.Entity) (tea.Model, tea.Cmd) {
+	m.status = ""
+	m.currentEntity = e
+	m.namespace = namespaceLabel(e.Key.NamespaceID)
+	m.detailPath.Reset()
+	m.detailSelected = 0
+	m.detailFilter = ""
+	m.dirty.Reset()
+	m.screen = screenDetail
+	return m, nil
+}
+
+// toggleBookmark implements "ctrl+b" in detail mode: bookmarking or
+// unbookmarking the entity currently open, persisted to disk.
+func (m *Model) toggleBookmark() (tea.Model, tea.Cmd) {
+	if m.currentEntity == nil || m.currentEntity.Key == nil {
+		return m, nil
+	}
+	key := m.currentEntity.Key
+	if idx := bookmarkIndex(m.bookmarks, key); idx >= 0 {
+		m.bookmarks = append(m.bookmarks[:idx], m.bookmarks[idx+1:]...)
+		m.status = "bookmark removed"
+	} else {
+		label := entityLabel(m.currentEntity)
+		if m.namespace != "" && m.namespace != query.DefaultNamespaceLabel {
+			label = m.namespace + "/" + label
+		}
+		m.bookmarks = append(m.bookmarks, bookmark{Label: label, Key: key})
+		m.status = "bookmarked"
+	}
+	if err := saveBookmarks(m.bookmarks); err != nil {
+		m.err = err
+	}
+	return m, nil
+}
+
+// startBookmarkList implements "ctrl+l": opens a picker over the saved
+// bookmarks, from either browse or detail mode. All bookmarked entities are
+// fetched in one batched Lookup so the picker can preview each one live as
+// the user moves the selection, rather than only showing its label.
+func (m *Model) startBookmarkList() (tea.Model, tea.Cmd) {
+	if len(m.bookmarks) == 0 {
+		m.status = "no bookmarks"
+		return m, nil
+	}
+	m.bookmarkCursor = 0
+	m.bookmarkEntities = nil
+	m.prevScreen = m.screen
+	m.screen = screenBookmarks
+	return m, lookupBookmarksCmd(m.client, m.bookmarks)
+}
+
+// updateBookmarkList drives the bookmark picker: j/k move the highlighted
+// bookmark (whose preview panel updates as a side effect of viewBookmarks
+// reading m.bookmarkCursor), enter opens it, esc/q cancels back out.
+func (m *Model) updateBookmarkList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "j", "down":
+		if m.bookmarkCursor < len(m.bookmarks)-1 {
+			m.bookmarkCursor++
+		}
+		return m, nil
+	case "k", "up":
+		if m.bookmarkCursor > 0 {
+			m.bookmarkCursor--
+		}
+		return m, nil
+	case "enter", "l", "right":
+		return m.openBookmark(m.bookmarkCursor)
+	case "esc", "q":
+		m.screen = m.prevScreen
+		return m, nil
+	}
+	return m, nil
+}
+
+// openBookmark opens the idx'th bookmark. If its entity was already fetched
+// for the picker's preview, it's opened directly (no extra round trip);
+// otherwise (a lookup still in flight, or the bookmarked entity no longer
+// exists) it falls back to a fresh Lookup via goToKey.
+func (m *Model) openBookmark(idx int) (tea.Model, tea.Cmd) {
+	if idx < 0 || idx >= len(m.bookmarks) {
+		return m, nil
+	}
+	key := m.bookmarks[idx].Key
+	e, ok := m.bookmarkEntities[key.String()]
+	if !ok || e == nil {
+		return m.goToKey(key)
+	}
+	if m.dirty.Dirty() {
+		m.prevScreen = m.screen
+		m.confirmYes = func(mm *Model) (tea.Model, tea.Cmd) {
+			return mm.openEntity(e)
+		}
+		m.screen = screenConfirmQuit
+		return m, nil
+	}
+	return m.openEntity(e)
 }
 
 // detailBack implements "h"/"esc" in detail mode: stepping out one nesting
@@ -217,7 +373,7 @@ func (m *Model) updateNewItemType(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.newItemTarget == targetLeafRetype && m.newItemKind == m.retypeOriginal.Kind {
 			zero = m.retypeOriginal // same type re-picked: keep the existing value
 		}
-		if fe, ok := edit.NewFieldEditor(zero); ok {
+		if fe, ok := edit.NewFieldEditor(zero, m.width); ok {
 			m.fieldEditor = fe
 			m.screen = screenNewItemValue
 			return m, fe.Form().Init()

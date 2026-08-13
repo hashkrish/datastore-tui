@@ -25,6 +25,16 @@ func resolveNamespaceID(namespace string) string {
 	return namespace
 }
 
+// namespaceLabel converts a Key's actual namespace ID (as returned by the
+// server, "" for the default namespace) into the browse view's display
+// label. The inverse of resolveNamespaceID.
+func namespaceLabel(namespaceID string) string {
+	if namespaceID == "" {
+		return query.DefaultNamespaceLabel
+	}
+	return namespaceID
+}
+
 // filterDetailRows keeps only the rows whose property name/index or preview
 // text contains filter (case-insensitive); an empty filter keeps everything.
 func filterDetailRows(rows []panes.DetailRow, filter string) []panes.DetailRow {

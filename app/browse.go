@@ -70,6 +70,9 @@ func (m *Model) updateBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, km.Refresh):
 		return m.refreshFocused()
 
+	case key.Matches(msg, km.ListBookmarks):
+		return m.startBookmarkList()
+
 	case key.Matches(msg, km.Add):
 		if m.nav.Focus == nav.ColumnEntity {
 			return m.startNewEntity()

@@ -25,7 +25,7 @@ func RenderDetail(breadcrumb string, rows []DetailRow, selected int, width, heig
 		return b.String()
 	}
 
-	visibleRows := max(height-3, 1)
+	visibleRows := max(height-2, 1)
 	start := 0
 	if selected >= visibleRows {
 		start = selected - visibleRows + 1

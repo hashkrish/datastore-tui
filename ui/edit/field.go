@@ -32,10 +32,12 @@ type FieldEditor struct {
 	keyName   string
 }
 
-// NewFieldEditor builds an edit form for v. v must be a scalar leaf
-// (anything but KindEntity/KindArray, which are containers navigated via
-// the detail view rather than edited directly); ok is false otherwise.
-func NewFieldEditor(v model.Value) (*FieldEditor, bool) {
+// NewFieldEditor builds an edit form for v, sized to width (the full
+// terminal width, so text/blob editors aren't squeezed to huh's narrower
+// default). v must be a scalar leaf (anything but KindEntity/KindArray,
+// which are containers navigated via the detail view rather than edited
+// directly); ok is false otherwise.
+func NewFieldEditor(v model.Value, width int) (*FieldEditor, bool) {
 	e := &FieldEditor{kind: v.Kind}
 	switch v.Kind {
 	case model.KindString:
@@ -96,6 +98,9 @@ func NewFieldEditor(v model.Value) (*FieldEditor, bool) {
 		))
 	default:
 		return nil, false
+	}
+	if width > 0 {
+		e.form = e.form.WithWidth(width)
 	}
 	return e, true
 }

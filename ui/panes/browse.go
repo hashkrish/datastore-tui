@@ -45,14 +45,35 @@ func RenderBrowse(state *nav.State, width, height int) string {
 		renderColumn("Namespace", state.VisibleItems(nav.ColumnNamespace), state.SelectedIndex(nav.ColumnNamespace), state.Focus == nav.ColumnNamespace, colWidth, height),
 		renderColumn("Kind", state.VisibleItems(nav.ColumnKind), state.SelectedIndex(nav.ColumnKind), state.Focus == nav.ColumnKind, colWidth, height),
 		renderColumn("Entity", state.VisibleItems(nav.ColumnEntity), state.SelectedIndex(nav.ColumnEntity), state.Focus == nav.ColumnEntity, colWidth, height),
-		renderPreviewColumn(state.SelectedEntity(), previewWidth, height),
+		renderPreviewColumn(state.SelectedEntity(), "(no entity selected)", previewWidth, height),
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Top, cols...)
 }
 
+// RenderBookmarks renders the bookmark picker (ctrl+l): a scrollable list of
+// bookmark labels on the left, highlighting selected, plus a preview pane on
+// the right showing the highlighted bookmark's entity properties — the same
+// live preview RenderBrowse gives the Miller-column entity list. preview is
+// nil either while its entity is still being fetched (loading) or if the
+// lookup came back without it (the bookmarked entity no longer exists).
+func RenderBookmarks(labels []string, selected int, preview *model.Entity, loading bool, width, height int) string {
+	colWidth := width / 3
+	previewWidth := width - colWidth
+
+	listCol := renderColumn("Bookmarks", labels, selected, true, colWidth, height)
+
+	emptyMessage := "(entity not found)"
+	if loading {
+		emptyMessage = "(loading...)"
+	}
+	previewCol := renderPreviewColumn(preview, emptyMessage, previewWidth, height)
+	return lipgloss.JoinHorizontal(lipgloss.Top, listCol, previewCol)
+}
+
 // renderPreviewColumn shows the highlighted entity's key and top-level
 // properties, read-only — a ranger-style preview of what "enter" would open.
-func renderPreviewColumn(e *model.Entity, width, height int) string {
+// emptyMessage is shown in place of the property list when e is nil.
+func renderPreviewColumn(e *model.Entity, emptyMessage string, width, height int) string {
 	innerHeight := height - 2
 	innerWidth := width - 2
 
@@ -61,7 +82,7 @@ func renderPreviewColumn(e *model.Entity, width, height int) string {
 	b.WriteString("\n")
 
 	if e == nil {
-		b.WriteString(dimStyle.Render("  (no entity selected)"))
+		b.WriteString(dimStyle.Render("  " + emptyMessage))
 		return blurredBorder.Width(innerWidth).Height(innerHeight).Render(b.String())
 	}
 

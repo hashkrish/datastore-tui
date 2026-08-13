@@ -30,6 +30,7 @@ const (
 	screenConfirmDeleteEntity
 	screenConfirmDeleteItem
 	screenConfirmQuit
+	screenBookmarks
 	screenHelp
 )
 
@@ -73,6 +74,10 @@ type Model struct {
 	newEntityKeyID   string
 	newEntityKeyName string
 
+	bookmarks        []bookmark
+	bookmarkCursor   int
+	bookmarkEntities map[string]*model.Entity // key.String() -> fetched entity, nil map while loading
+
 	chordG keymap.Chord
 	chordD keymap.Chord
 
@@ -91,6 +96,7 @@ func New(c *client.Client) *Model {
 		client:      c,
 		nav:         nav.NewState(),
 		filterInput: fi,
+		bookmarks:   loadBookmarks(),
 	}
 }
 
@@ -160,6 +166,22 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		kind, _ := m.nav.SelectedKind()
 		return m, loadEntitiesCmd(m.client, ns, kind, "", false)
 
+	case keyLookupMsg:
+		m.status = ""
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		return m.openEntity(msg.entity)
+
+	case bookmarksLookedUpMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		m.bookmarkEntities = msg.entities
+		return m, nil
+
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	}
@@ -198,6 +220,8 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.updateEditLeaf(msg) // same form-driving logic, different completion handler below
 	case screenNewEntityKey:
 		return m.updateNewEntityKey(msg)
+	case screenBookmarks:
+		return m.updateBookmarkList(msg)
 	case screenConfirmDeleteEntity, screenConfirmDeleteItem, screenConfirmQuit:
 		return m.updateConfirm(msg)
 	case screenHelp:
@@ -227,6 +251,8 @@ func (m *Model) viewBody() string {
 		return m.viewDetailScreen(contentHeight)
 	case screenNewEntityKey:
 		return m.newEntityKeyForm.View()
+	case screenBookmarks:
+		return m.viewBookmarks(contentHeight)
 	case screenConfirmDeleteEntity:
 		return "Delete entity " + entityLabel(m.nav.SelectedEntity()) + "? Press y to confirm, any other key to cancel."
 	case screenConfirmQuit:
@@ -238,13 +264,36 @@ func (m *Model) viewBody() string {
 	}
 }
 
+// viewBookmarks renders the bookmark picker (ctrl+l): a scrollable list of
+// bookmark labels plus a live preview of the highlighted entry's entity
+// properties, fetched in one batched Lookup when the picker opens.
+func (m *Model) viewBookmarks(height int) string {
+	labels := make([]string, len(m.bookmarks))
+	for i, b := range m.bookmarks {
+		labels[i] = b.Label
+	}
+	var preview *model.Entity
+	if m.bookmarkCursor >= 0 && m.bookmarkCursor < len(m.bookmarks) {
+		preview = m.bookmarkEntities[m.bookmarks[m.bookmarkCursor].Key.String()]
+	}
+	return panes.RenderBookmarks(labels, m.bookmarkCursor, preview, m.bookmarkEntities == nil, m.width, height)
+}
+
 func (m *Model) viewDetailScreen(height int) string {
 	breadcrumb := panes.FormatBreadcrumb(m.namespace, m.currentEntity.Key, &m.detailPath)
 	_, rows, err := m.currentScope()
 	if err != nil {
 		return breadcrumb + "\n\n" + err.Error()
 	}
-	base := panes.RenderDetail(breadcrumb, rows, m.detailSelected, m.width, height-4)
+	// Only reserve a separator line when something (a form or confirm
+	// prompt) is appended below the row list; plain viewing uses the full
+	// available height for rows.
+	reserve := 0
+	switch m.screen {
+	case screenEditLeaf, screenNewItemValue, screenNewItemType, screenConfirmDeleteItem:
+		reserve = 1
+	}
+	base := panes.RenderDetail(breadcrumb, rows, m.detailSelected, m.width, height-reserve)
 
 	switch m.screen {
 	case screenEditLeaf, screenNewItemValue:
@@ -268,7 +317,7 @@ func (m *Model) viewStatus() string {
 	if m.dirty.Dirty() {
 		dirtyMark = " [modified]"
 	}
-	help := "j/k move  ctrl+u/d half page  l/enter open  h back  t retype  / filter  o new  dd delete  ctrl+s save  ? help  q quit"
+	help := "j/k move  ctrl+u/d half page  l/enter open  h back  t retype  / filter  o new  dd delete  ctrl+s save  ctrl+b bookmark  ctrl+l bookmarks  ? help  q quit"
 	if m.status != "" {
 		return style.Render(m.status + dirtyMark + "  " + help)
 	}
@@ -295,6 +344,7 @@ Browse mode:
   o              new entity (Entity column)
   dd             delete selected entity (Entity column)
   R              refresh focused column
+  ctrl+l         open bookmarks (jump to a bookmarked entity)
   q, ctrl+c      quit
   (right pane previews the highlighted entity's properties)
 
@@ -308,8 +358,16 @@ Detail mode (viewing/editing an entity):
   /              filter the current scope's properties
   o              add array item (when viewing an array)
   dd             delete array item (when viewing an array)
+  ctrl+]         open the entity a selected Key property points at
+  ctrl+b         bookmark/unbookmark the current entity
+  ctrl+l         open bookmarks (jump to a bookmarked entity)
   ctrl+s         save pending edits
   q/esc          back to browse (prompts if unsaved)
+
+Bookmark picker (ctrl+l):
+  j/k            move (right pane previews the highlighted bookmark's entity)
+  enter/l        open the highlighted bookmark
+  esc/q          cancel back out
 
 Press any key to close this help.`
 }
