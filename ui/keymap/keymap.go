@@ -76,6 +76,7 @@ type DetailKeyMap struct {
 	ToggleBookmark           key.Binding // ctrl+b: bookmark/unbookmark the current entity
 	ListBookmarks            key.Binding // ctrl+l: open the bookmark picker
 	Quit                     key.Binding
+	Help                     key.Binding
 }
 
 // DefaultDetailKeyMap returns the standard vim bindings for detail mode.
@@ -92,12 +93,13 @@ func DefaultDetailKeyMap() DetailKeyMap {
 		Filter:         key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
 		AddItem:        key.NewBinding(key.WithKeys("o"), key.WithHelp("o", "add item")),
 		DeleteItem:     key.NewBinding(key.WithKeys("d"), key.WithHelp("dd", "delete item")),
-		Save:           key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "save")),
+		Save:           key.NewBinding(key.WithKeys("w"), key.WithHelp("w", "save")),
 		Refresh:        key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "refresh")),
 		GoToKey:        key.NewBinding(key.WithKeys("ctrl+]"), key.WithHelp("ctrl+]", "go to key")),
 		ToggleBookmark: key.NewBinding(key.WithKeys("ctrl+b"), key.WithHelp("ctrl+b", "bookmark")),
 		ListBookmarks:  key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "bookmarks")),
 		Quit:           key.NewBinding(key.WithKeys("q", "esc"), key.WithHelp("q/esc", "back to browse")),
+		Help:           key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 	}
 }
 

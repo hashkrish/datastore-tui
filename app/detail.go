@@ -18,6 +18,11 @@ func (m *Model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, km.Quit):
 		return m.exitDetailToBrowse()
 
+	case key.Matches(msg, km.Help):
+		m.prevScreen = screenDetail
+		m.screen = screenHelp
+		return m, nil
+
 	case key.Matches(msg, km.Back):
 		return m.detailBack()
 

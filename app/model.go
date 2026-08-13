@@ -413,7 +413,7 @@ Detail mode (viewing/editing an entity):
   ctrl+]         open the entity a selected Key property points at
   ctrl+b         bookmark/unbookmark the current entity
   ctrl+l         open bookmarks (jump to a bookmarked entity)
-  ctrl+s         save pending edits
+  w              save pending edits
   q/esc          back to browse (prompts if unsaved)
 
 Bookmark picker (ctrl+l):
