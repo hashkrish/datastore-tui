@@ -3,10 +3,14 @@
 package edit
 
 import (
+	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/huh"
 	"github.com/krishnan/datastore-tui/datastore/model"
@@ -27,9 +31,13 @@ type FieldEditor struct {
 	latVal    string
 	lngVal    string
 	blobVal   string
-	keyKind   string
-	keyID     string
-	keyName   string
+	// blobShowable is true when the blob's bytes decoded (see
+	// decodeBlobText) to displayable text rather than falling back to
+	// base64 — Result() must mirror whichever path NewFieldEditor took.
+	blobShowable bool
+	keyKind      string
+	keyID        string
+	keyName      string
 }
 
 // NewFieldEditor builds an edit form for v, sized to width (the full
@@ -73,10 +81,18 @@ func NewFieldEditor(v model.Value, width int) (*FieldEditor, bool) {
 			huh.NewInput().Title("Longitude").Value(&e.lngVal).Validate(validateFloat),
 		))
 	case model.KindBlob:
-		e.blobVal = base64.StdEncoding.EncodeToString(v.BlobValue)
-		e.form = huh.NewForm(huh.NewGroup(
-			huh.NewText().Title("Blob value (base64)").Value(&e.blobVal).Validate(validateBase64),
-		))
+		if text, ok := decodeBlobText(v.BlobValue); ok {
+			e.blobShowable = true
+			e.blobVal = text
+			e.form = huh.NewForm(huh.NewGroup(
+				huh.NewText().Title(blobEditTitle(text)).Value(&e.blobVal),
+			))
+		} else {
+			e.blobVal = base64.StdEncoding.EncodeToString(v.BlobValue)
+			e.form = huh.NewForm(huh.NewGroup(
+				huh.NewText().Title("Blob value (base64)").Value(&e.blobVal).Validate(validateBase64),
+			))
+		}
 	case model.KindKey:
 		if v.KeyValue != nil {
 			last := v.KeyValue.Last()
@@ -145,6 +161,9 @@ func (e *FieldEditor) Result() (model.Value, error) {
 		}
 		return model.GeoPointValueOf(lat, lng), nil
 	case model.KindBlob:
+		if e.blobShowable {
+			return model.BlobValueOf(encodeBlobText(e.blobVal)), nil
+		}
 		b, err := base64.StdEncoding.DecodeString(e.blobVal)
 		if err != nil {
 			return model.Value{}, err
@@ -190,4 +209,56 @@ func validateTimestamp(s string) error {
 func validateBase64(s string) error {
 	_, err := base64.StdEncoding.DecodeString(s)
 	return err
+}
+
+// decodeBlobText decodes b to text for editing when it's displayable —
+// valid UTF-8 with no non-whitespace control characters — pretty-printing
+// it with a two-space indent first if it's valid JSON. ok is false for
+// binary data, which the caller falls back to editing as base64.
+func decodeBlobText(b []byte) (text string, ok bool) {
+	if !utf8.Valid(b) || !isPrintableText(b) {
+		return "", false
+	}
+	if json.Valid(b) {
+		var buf bytes.Buffer
+		if err := json.Indent(&buf, b, "", "  "); err == nil {
+			return buf.String(), true
+		}
+	}
+	return string(b), true
+}
+
+// encodeBlobText reverses decodeBlobText for saving: valid JSON is compacted
+// back down before being stored as the blob's raw bytes, since the
+// two-space indent decodeBlobText applies is purely a display convenience.
+func encodeBlobText(s string) []byte {
+	if json.Valid([]byte(s)) {
+		var buf bytes.Buffer
+		if err := json.Compact(&buf, []byte(s)); err == nil {
+			return buf.Bytes()
+		}
+	}
+	return []byte(s)
+}
+
+// blobEditTitle labels the blob edit field by what it actually contains.
+func blobEditTitle(text string) string {
+	if json.Valid([]byte(text)) {
+		return "Blob value (JSON)"
+	}
+	return "Blob value (text)"
+}
+
+// isPrintableText reports whether b contains only displayable characters —
+// any control character other than \n, \r, or \t disqualifies it as binary.
+func isPrintableText(b []byte) bool {
+	for _, r := range string(b) {
+		if r == '\n' || r == '\r' || r == '\t' {
+			continue
+		}
+		if unicode.IsControl(r) {
+			return false
+		}
+	}
+	return true
 }
