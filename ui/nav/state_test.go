@@ -206,7 +206,7 @@ func TestState_SetEntitiesPage_ReplaceDropsOldEntities(t *testing.T) {
 	s.SetEntitiesPage(&client.QueryPage{Entities: []*model.Entity{entityWithName("alice")}}, false)
 	s.SetEntitiesPage(&client.QueryPage{Entities: []*model.Entity{entityWithName("carol")}}, false)
 
-	if got := s.VisibleItems(ColumnEntity); len(got) != 1 || got[0] != "Person/carol" {
-		t.Fatalf("VisibleItems = %v, want just [Person/carol]", got)
+	if got := s.VisibleItems(ColumnEntity); len(got) != 1 || got[0] != "carol" {
+		t.Fatalf("VisibleItems = %v, want just [carol]", got)
 	}
 }

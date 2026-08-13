@@ -122,10 +122,11 @@ func (s *State) SetEntitiesPage(page *client.QueryPage, appendPage bool) {
 	s.entityHasMore = page.HasMore
 }
 
-// entityLabel renders an Entity's list-row label: its key plus, if present,
-// a short summary of its first couple of scalar properties.
+// entityLabel renders an Entity's list-row label for the Entity column —
+// just its ID/Name, without the "Kind/" prefix PathElement.String() would
+// add, since the column is already scoped to one kind.
 func entityLabel(e *model.Entity) string {
-	return e.Key.Last().String()
+	return e.Key.Last().IDOrName()
 }
 
 // EntityCursor and EntityHasMore expose pagination state for the entity

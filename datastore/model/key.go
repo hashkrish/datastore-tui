@@ -6,6 +6,7 @@ package model
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -28,6 +29,17 @@ func (p PathElement) String() string {
 		return fmt.Sprintf("%s/%d", p.Kind, p.ID)
 	}
 	return fmt.Sprintf("%s/%s", p.Kind, p.Name)
+}
+
+// IDOrName returns just this path element's identity — its numeric ID or
+// its Name — without the "Kind/" prefix String includes. Useful wherever
+// the kind is already implied by surrounding context (e.g. the browse
+// view's Entity column, which is already scoped to one kind).
+func (p PathElement) IDOrName() string {
+	if p.HasID() {
+		return strconv.FormatInt(p.ID, 10)
+	}
+	return p.Name
 }
 
 // Key identifies an Entity: a namespaced project plus an ancestor Path, the
