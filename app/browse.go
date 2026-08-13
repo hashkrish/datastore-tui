@@ -73,6 +73,9 @@ func (m *Model) updateBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, km.ListBookmarks):
 		return m.startBookmarkList()
 
+	case key.Matches(msg, km.Query):
+		return m.startQuery()
+
 	case key.Matches(msg, km.Add):
 		if m.nav.Focus == nav.ColumnEntity {
 			return m.startNewEntity()
@@ -154,6 +157,10 @@ func (m *Model) drillIn() (tea.Model, tea.Cmd) {
 		if !ok || !m.nav.FocusRight() {
 			return m, nil
 		}
+		// A normal drill-in always lands on the plain unfiltered list — any
+		// query filter from a previous visit to this kind's Entity column no
+		// longer applies.
+		m.activeFilter = nil
 		return m, loadEntitiesCmd(m.client, m.namespace, kind, "", false)
 
 	default: // ColumnEntity
@@ -187,6 +194,9 @@ func (m *Model) refreshFocused() (tea.Model, tea.Cmd) {
 		kind, ok := m.nav.SelectedKind()
 		if !ok {
 			return m, nil
+		}
+		if m.activeFilter != nil {
+			return m, runFilteredQueryCmd(m.client, m.namespace, kind, *m.activeFilter, "", false)
 		}
 		return m, loadEntitiesCmd(m.client, m.namespace, kind, "", false)
 	}

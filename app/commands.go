@@ -27,9 +27,29 @@ func loadKindsCmd(c *client.Client, namespace string) tea.Cmd {
 	}
 }
 
+// loadPropertiesCmd fetches kind's property names ("Q" in browse mode, so
+// the query filter form can offer a pick-list instead of a free-text name).
+func loadPropertiesCmd(c *client.Client, namespace, kind string) tea.Cmd {
+	return func() tea.Msg {
+		properties, err := query.ListProperties(context.Background(), c, namespace, kind)
+		return propertiesLoadedMsg{namespace: namespace, kind: kind, properties: properties, err: err}
+	}
+}
+
 func loadEntitiesCmd(c *client.Client, namespace, kind, cursor string, appendPage bool) tea.Cmd {
 	return func() tea.Msg {
 		page, err := query.ListEntitiesPage(context.Background(), c, namespace, kind, cursor, entityPageSize)
+		return entitiesLoadedMsg{namespace: namespace, kind: kind, page: page, appendPage: appendPage, err: err}
+	}
+}
+
+// runFilteredQueryCmd is loadEntitiesCmd's counterpart for a property-filtered
+// query ("Q" in browse mode): same entitiesLoadedMsg result, so Update's
+// existing handler and staleness guard apply unchanged regardless of
+// whether the page came from the plain list or a filter.
+func runFilteredQueryCmd(c *client.Client, namespace, kind string, filter client.PropertyFilter, cursor string, appendPage bool) tea.Cmd {
+	return func() tea.Msg {
+		page, err := query.QueryEntitiesPage(context.Background(), c, namespace, kind, filter, cursor, entityPageSize)
 		return entitiesLoadedMsg{namespace: namespace, kind: kind, page: page, appendPage: appendPage, err: err}
 	}
 }

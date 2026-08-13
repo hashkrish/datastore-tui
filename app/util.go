@@ -10,6 +10,8 @@ import (
 )
 
 var errNewEntityKindRequired = errors.New("app: new entity requires a Kind")
+var errQueryPropertyRequired = errors.New("app: query filter requires a property name")
+var errQueryUnsupportedValueType = errors.New("app: query filter value type is not editable")
 
 func parseInt64(s string) (int64, error) {
 	return strconv.ParseInt(s, 10, 64)

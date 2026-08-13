@@ -8,19 +8,47 @@ import (
 
 // Query is a simplified structured query: enough to list a Kind's entities,
 // or query the __namespace__/__kind__ metadata kinds, with cursor-based
-// pagination. It intentionally does not expose Datastore's full filter
-// grammar, which this TUI does not need for browsing/editing.
+// pagination, plus a single property filter. It intentionally does not
+// expose Datastore's full filter grammar (composite AND/OR of many
+// filters) — this TUI only ever needs one filter at a time.
 type Query struct {
 	Kind        string
 	Limit       int32  // 0 means "server default"
 	StartCursor string // "" for the first page
 	Order       []Order
+	Filter      *PropertyFilter // nil means unfiltered
 }
 
 // Order is a single ASC/DESC ordering clause.
 type Order struct {
 	Property   string
 	Descending bool
+}
+
+// FilterOp is one of Datastore's property-filter comparison operators.
+type FilterOp string
+
+const (
+	OpEqual              FilterOp = "EQUAL"
+	OpLessThan           FilterOp = "LESS_THAN"
+	OpGreaterThan        FilterOp = "GREATER_THAN"
+	OpLessThanOrEqual    FilterOp = "LESS_THAN_OR_EQUAL"
+	OpGreaterThanOrEqual FilterOp = "GREATER_THAN_OR_EQUAL"
+	// OpHasAncestor is Datastore's ancestor-query operator: property must be
+	// "__key__" and Value a Key-typed value naming the ancestor. Used to
+	// scope a query against the __property__ metadata kind to one __kind__.
+	OpHasAncestor FilterOp = "HAS_ANCESTOR"
+)
+
+// PropertyFilter restricts a query to entities where Property compares to
+// Value via Op. Datastore requires that inequality operators (anything but
+// OpEqual) target only one property per query and be the first sort order —
+// since Query only ever carries one PropertyFilter, that constraint is
+// satisfied automatically and needs no separate validation here.
+type PropertyFilter struct {
+	Property string
+	Op       FilterOp
+	Value    model.Value
 }
 
 type wireKindExpr struct {
@@ -36,8 +64,21 @@ type wirePropertyOrder struct {
 	Direction string          `json:"direction"`
 }
 
+type wirePropertyFilter struct {
+	Property wirePropertyRef `json:"property"`
+	Op       string          `json:"op"`
+	Value    model.Value     `json:"value"`
+}
+
+// wireFilter mirrors the REST API's Filter union; only propertyFilter is
+// populated since Query caps at one filter (see PropertyFilter's doc).
+type wireFilter struct {
+	PropertyFilter *wirePropertyFilter `json:"propertyFilter,omitempty"`
+}
+
 type wireStructuredQuery struct {
 	Kind        []wireKindExpr      `json:"kind,omitempty"`
+	Filter      *wireFilter         `json:"filter,omitempty"`
 	Order       []wirePropertyOrder `json:"order,omitempty"`
 	StartCursor string              `json:"startCursor,omitempty"`
 	Limit       *int32              `json:"limit,omitempty"`
@@ -89,6 +130,13 @@ func (c *Client) RunQuery(ctx context.Context, namespace string, q Query) (*Quer
 	}
 	if q.Limit > 0 {
 		sq.Limit = &q.Limit
+	}
+	if q.Filter != nil {
+		sq.Filter = &wireFilter{PropertyFilter: &wirePropertyFilter{
+			Property: wirePropertyRef{Name: q.Filter.Property},
+			Op:       string(q.Filter.Op),
+			Value:    q.Filter.Value,
+		}}
 	}
 	for _, o := range q.Order {
 		dir := "ASCENDING"

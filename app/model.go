@@ -3,6 +3,7 @@
 package app
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -34,6 +35,9 @@ const (
 	screenConfirmQuit
 	screenConfirmRefresh
 	screenBookmarks
+	screenQueryFilter
+	screenQueryValue
+	screenQueryPastePicker
 	screenHelp
 )
 
@@ -80,6 +84,19 @@ type Model struct {
 	bookmarks        []bookmark
 	bookmarkCursor   int
 	bookmarkEntities map[string]*model.Entity // key.String() -> fetched entity, nil map while loading
+
+	// Query filter ("Q" in browse mode): screenQueryFilter fills in
+	// queryProperty/queryOp/queryValueKind via queryFilterForm, then
+	// screenQueryValue reuses fieldEditor to fill in the value (optionally
+	// via screenQueryPastePicker, for Key-typed values). activeFilter is
+	// non-nil once a query has run, so refreshing the Entity column re-runs
+	// it instead of reloading the plain list.
+	queryFilterForm  *huh.Form
+	queryProperty    string
+	queryOp          client.FilterOp
+	queryValueKind   model.ValueKind
+	queryPasteCursor int
+	activeFilter     *client.PropertyFilter
 
 	chordG keymap.Chord
 	chordD keymap.Chord
@@ -168,6 +185,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.nav.SetEntitiesPage(msg.page, msg.appendPage)
 		return m, nil
 
+	case propertiesLoadedMsg:
+		m.status = ""
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		if kind, ok := m.nav.SelectedKind(); !ok || kind != msg.kind {
+			return m, nil
+		}
+		if ns, ok := m.nav.SelectedNamespace(); !ok || ns != msg.namespace {
+			return m, nil
+		}
+		return m.openQueryFilterForm(msg.properties)
+
 	case entitySavedMsg:
 		if msg.err != nil {
 			m.err = msg.err
@@ -219,6 +250,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateNewItemType(msg)
 	case screenNewEntityKey:
 		return m.updateNewEntityKey(msg)
+	case screenQueryFilter:
+		return m.updateQueryFilter(msg)
+	case screenQueryValue:
+		return m.updateQueryValue(msg)
 	}
 	return m, nil
 }
@@ -244,6 +279,12 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.updateNewEntityKey(msg)
 	case screenBookmarks:
 		return m.updateBookmarkList(msg)
+	case screenQueryFilter:
+		return m.updateQueryFilter(msg)
+	case screenQueryValue:
+		return m.updateQueryValue(msg)
+	case screenQueryPastePicker:
+		return m.updateQueryPastePicker(msg)
 	case screenConfirmDeleteEntity, screenConfirmDeleteItem, screenConfirmQuit, screenConfirmRefresh:
 		return m.updateConfirm(msg)
 	case screenHelp:
@@ -275,6 +316,12 @@ func (m *Model) viewBody() string {
 		return m.newEntityKeyForm.View()
 	case screenBookmarks:
 		return m.viewBookmarks(contentHeight)
+	case screenQueryFilter:
+		return m.viewQueryFilter()
+	case screenQueryValue:
+		return m.viewQueryValue()
+	case screenQueryPastePicker:
+		return m.viewQueryPastePicker(contentHeight)
 	case screenConfirmDeleteEntity:
 		return "Delete entity " + entityLabel(m.nav.SelectedEntity()) + "? Press y to confirm, any other key to cancel."
 	case screenConfirmQuit:
@@ -290,15 +337,57 @@ func (m *Model) viewBody() string {
 // bookmark labels plus a live preview of the highlighted entry's entity
 // properties, fetched in one batched Lookup when the picker opens.
 func (m *Model) viewBookmarks(height int) string {
-	labels := make([]string, len(m.bookmarks))
-	for i, b := range m.bookmarks {
-		labels[i] = b.Label
-	}
 	var preview *model.Entity
 	if m.bookmarkCursor >= 0 && m.bookmarkCursor < len(m.bookmarks) {
 		preview = m.bookmarkEntities[m.bookmarks[m.bookmarkCursor].Key.String()]
 	}
-	return panes.RenderBookmarks(labels, m.bookmarkCursor, preview, m.bookmarkEntities == nil, m.width, height)
+	return panes.RenderBookmarks(m.bookmarkLabels(), m.bookmarkCursor, preview, m.bookmarkEntities == nil, m.width, height)
+}
+
+// bookmarkLabels returns each bookmark's display label, shared by the ctrl+l
+// picker (viewBookmarks) and the query filter's paste-from-bookmark picker
+// (viewQueryPastePicker) — both list the same m.bookmarks.
+func (m *Model) bookmarkLabels() []string {
+	labels := make([]string, len(m.bookmarks))
+	for i, b := range m.bookmarks {
+		labels[i] = b.Label
+	}
+	return labels
+}
+
+// viewQueryFilter renders the property/operator/value-type form ("Q" in
+// browse mode, step 1). Unlike screenNewItemValue's type-select step, this
+// doesn't reuse viewDetailScreen — there's no open entity/breadcrumb here,
+// since a query is launched from browse, not detail, mode.
+func (m *Model) viewQueryFilter() string {
+	kind, _ := m.nav.SelectedKind()
+	return "Query " + kind + "\n\n" + m.queryFilterForm.View()
+}
+
+// viewQueryValue renders the value editor (query filter step 2), reusing
+// the same fieldEditor screenNewItemValue/screenEditLeaf drive. Below it, a
+// reminder that ctrl+p opens the paste-from-bookmark picker, but only when
+// the value being edited is a Key (the only type a bookmark can supply).
+func (m *Model) viewQueryValue() string {
+	kind, _ := m.nav.SelectedKind()
+	header := fmt.Sprintf("Query %s: %s %s ?", kind, m.queryProperty, filterOpSymbol(m.queryOp))
+	view := header + "\n\n" + m.fieldEditor.Form().View()
+	if m.queryValueKind == model.KindKey {
+		view += "\n(ctrl+p: paste key from a bookmark)"
+	}
+	return view
+}
+
+// viewQueryPastePicker renders the query value's paste-from-bookmark picker
+// — same live-preview shape as viewBookmarks (a batched Lookup already
+// fetched every bookmarked entity into m.bookmarkEntities), but a standalone
+// screen: picking one fills in the value form instead of opening the entity.
+func (m *Model) viewQueryPastePicker(height int) string {
+	var preview *model.Entity
+	if m.queryPasteCursor >= 0 && m.queryPasteCursor < len(m.bookmarks) {
+		preview = m.bookmarkEntities[m.bookmarks[m.queryPasteCursor].Key.String()]
+	}
+	return panes.RenderBookmarks(m.bookmarkLabels(), m.queryPasteCursor, preview, m.bookmarkEntities == nil, m.width, height)
 }
 
 func (m *Model) viewDetailScreen(height int) string {
@@ -369,7 +458,11 @@ func (m *Model) viewStatus() string {
 func (m *Model) currentInfo() string {
 	switch m.screen {
 	case screenBrowse, screenFilterInput:
-		return panes.FormatBrowseBreadcrumb(m.nav)
+		info := panes.FormatBrowseBreadcrumb(m.nav)
+		if m.activeFilter != nil {
+			info += fmt.Sprintf(" (filtered: %s %s %s)", m.activeFilter.Property, filterOpSymbol(m.activeFilter.Op), formatFilterValue(m.activeFilter.Value))
+		}
+		return info
 	default:
 		return ""
 	}
@@ -395,9 +488,15 @@ Browse mode:
   o              new entity (Entity column)
   dd             delete selected entity (Entity column)
   R              refresh focused column
+  Q              query: filter the current kind's entities by a property
   ctrl+l         open bookmarks (jump to a bookmarked entity)
   q, ctrl+c      quit
   (right pane previews the highlighted entity's properties)
+
+Query filter (Q):
+  enter          confirm each step (property/operator/type, then value)
+  esc            cancel back to browse
+  ctrl+p         (Key values only) paste from a bookmark, with live preview
 
 Detail mode (viewing/editing an entity):
   j/k            move between properties

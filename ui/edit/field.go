@@ -38,6 +38,11 @@ type FieldEditor struct {
 	keyKind      string
 	keyID        string
 	keyName      string
+	// keyBase preserves the ProjectID/NamespaceID and any ancestor path
+	// segments of the Key being edited — the kind/ID/name form fields only
+	// ever expose the leaf path element, so Result() splices the edited
+	// leaf back onto this rather than discarding the rest of the key.
+	keyBase *model.Key
 }
 
 // NewFieldEditor builds an edit form for v, sized to width (the full
@@ -94,15 +99,7 @@ func NewFieldEditor(v model.Value, width int) (*FieldEditor, bool) {
 			))
 		}
 	case model.KindKey:
-		if v.KeyValue != nil {
-			last := v.KeyValue.Last()
-			e.keyKind = last.Kind
-			if last.HasID() {
-				e.keyID = strconv.FormatInt(last.ID, 10)
-			} else {
-				e.keyName = last.Name
-			}
-		}
+		e.SetKeyValue(v.KeyValue)
 		e.form = huh.NewForm(huh.NewGroup(
 			huh.NewInput().Title("Key kind").Value(&e.keyKind),
 			huh.NewInput().Title("ID (numeric; leave blank to use Name instead)").Value(&e.keyID),
@@ -123,6 +120,26 @@ func NewFieldEditor(v model.Value, width int) (*FieldEditor, bool) {
 
 // Form returns the underlying huh.Form to embed as a tea.Model.
 func (e *FieldEditor) Form() *huh.Form { return e.form }
+
+// SetKeyValue populates a KindKey editor's kind/ID-or-name fields from k,
+// leaving them blank if k is nil. Exported so a caller can fill in a
+// Key-typed value editor from a source other than typing — e.g. the query
+// filter's paste-from-bookmark picker inserting a bookmarked entity's Key
+// without reaching into unexported fields.
+func (e *FieldEditor) SetKeyValue(k *model.Key) {
+	e.keyBase = k
+	e.keyKind, e.keyID, e.keyName = "", "", ""
+	if k == nil {
+		return
+	}
+	last := k.Last()
+	e.keyKind = last.Kind
+	if last.HasID() {
+		e.keyID = strconv.FormatInt(last.ID, 10)
+	} else {
+		e.keyName = last.Name
+	}
+}
 
 // Result converts the form's current field values back into a model.Value.
 // Call only after Form().State() == huh.StateCompleted.
@@ -183,7 +200,15 @@ func (e *FieldEditor) Result() (model.Value, error) {
 		} else {
 			pe.Name = e.keyName
 		}
-		return model.KeyValueOf(&model.Key{Path: []model.PathElement{pe}}), nil
+		key := &model.Key{Path: []model.PathElement{pe}}
+		if e.keyBase != nil {
+			key.ProjectID = e.keyBase.ProjectID
+			key.NamespaceID = e.keyBase.NamespaceID
+			if ancestors := len(e.keyBase.Path) - 1; ancestors > 0 {
+				key.Path = append(append([]model.PathElement{}, e.keyBase.Path[:ancestors]...), pe)
+			}
+		}
+		return model.KeyValueOf(key), nil
 	case model.KindNull:
 		return model.NullValue(), nil
 	default:

@@ -33,6 +33,17 @@ type entitiesLoadedMsg struct {
 	err        error
 }
 
+// namespace/kind record what this list of property names was fetched for,
+// so Update can drop a stale response the same way kindsLoadedMsg does —
+// e.g. if the user backs out of the kind before the __property__ query
+// (triggered by "Q") resolves.
+type propertiesLoadedMsg struct {
+	namespace  string
+	kind       string
+	properties []string
+	err        error
+}
+
 type entitySavedMsg struct {
 	err error
 }

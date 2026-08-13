@@ -52,6 +52,45 @@ func ListKinds(ctx context.Context, c *client.Client, namespace string) ([]strin
 	return kinds, nil
 }
 
+// ListProperties returns every property name defined on kind within
+// namespace, backed by an ancestor query against the reserved __property__
+// metadata kind (ancestored under __kind__/kind, per Datastore's metadata
+// query convention: https://cloud.google.com/datastore/docs/concepts/metadataqueries).
+// A property can appear more than once in __property__ if it has multiple
+// representations (e.g. both indexed as a string and as an array) — deduped
+// here since callers just want a flat pick-list of names.
+func ListProperties(ctx context.Context, c *client.Client, namespace, kind string) ([]string, error) {
+	// The ancestor key's namespace must match the query's namespace
+	// partition — Datastore rejects the request otherwise ("query namespace
+	// is X but ancestor namespace is Y").
+	ns := resolveNamespace(namespace)
+	ancestor := &model.Key{NamespaceID: ns, Path: []model.PathElement{{Kind: "__kind__", Name: kind}}}
+	page, err := c.RunQuery(ctx, ns, client.Query{
+		Kind: "__property__",
+		Filter: &client.PropertyFilter{
+			Property: "__key__",
+			Op:       client.OpHasAncestor,
+			Value:    model.KeyValueOf(ancestor),
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	seen := make(map[string]bool, len(page.Entities))
+	properties := make([]string, 0, len(page.Entities))
+	for _, e := range page.Entities {
+		name := e.Key.Last().Name
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		properties = append(properties, name)
+	}
+	sort.Strings(properties)
+	return properties, nil
+}
+
 // ListEntitiesPage fetches one page of entities of kind within namespace,
 // ordered by key for stable pagination. Pass cursor="" for the first page;
 // subsequent pages use the EndCursor from the previous QueryPage.
@@ -61,6 +100,27 @@ func ListEntitiesPage(ctx context.Context, c *client.Client, namespace, kind, cu
 		StartCursor: cursor,
 		Limit:       pageSize,
 		Order:       []client.Order{{Property: "__key__"}},
+	})
+}
+
+// QueryEntitiesPage fetches one page of entities of kind within namespace
+// matching filter, the same shape as ListEntitiesPage but with a property
+// filter applied. Ordering by key isn't possible when filter's operator is
+// an inequality (Datastore requires the query's first sort order to match
+// the inequality-filtered property), so those queries instead order by that
+// property; equality filters keep the same by-key ordering ListEntitiesPage
+// uses for stable pagination.
+func QueryEntitiesPage(ctx context.Context, c *client.Client, namespace, kind string, filter client.PropertyFilter, cursor string, pageSize int32) (*client.QueryPage, error) {
+	order := []client.Order{{Property: "__key__"}}
+	if filter.Op != client.OpEqual {
+		order = []client.Order{{Property: filter.Property}}
+	}
+	return c.RunQuery(ctx, resolveNamespace(namespace), client.Query{
+		Kind:        kind,
+		StartCursor: cursor,
+		Limit:       pageSize,
+		Order:       order,
+		Filter:      &filter,
 	})
 }
 

@@ -32,6 +32,7 @@ type BrowseKeyMap struct {
 	Refresh                  key.Binding
 	Open                     key.Binding
 	ListBookmarks            key.Binding // ctrl+l: open the bookmark picker
+	Query                    key.Binding // Q: filter the current kind's entities by a property
 	Quit                     key.Binding
 	Help                     key.Binding
 	PendingG                 key.Binding // first "g" of "gg"
@@ -54,6 +55,7 @@ func DefaultBrowseKeyMap() BrowseKeyMap {
 		Refresh:       key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "refresh")),
 		Open:          key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open")),
 		ListBookmarks: key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "bookmarks")),
+		Query:         key.NewBinding(key.WithKeys("Q"), key.WithHelp("Q", "query")),
 		Quit:          key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
 		Help:          key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 	}
