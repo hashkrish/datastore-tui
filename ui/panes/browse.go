@@ -30,25 +30,63 @@ var (
 	dimStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 )
 
-// RenderBrowse renders the three Miller columns (namespace/kind/entity) plus
-// a fourth preview pane showing the highlighted entity's properties (so its
-// fields are visible before actually opening it for edit), side by side and
-// sized to fit width/height, with the focused column's title highlighted.
+// RenderBrowse renders a sliding three-pane view — the column one level
+// above focus ("parent"), the focused Miller column ("current"), and a
+// preview of the column one level below ("preview") — sized to width/height
+// as 20%/30%/50% of the space. Which nav.Column plays "parent" and
+// "current" shifts with state.Focus (ranger-style drill-in): focusing Kind
+// shows Namespace/Kind/Entity-preview, focusing Entity shows
+// Kind/Entity/entity-property-preview. At the top of the hierarchy (Focus ==
+// ColumnNamespace) there is no parent, so that pane renders blank; at the
+// bottom (Focus == ColumnEntity) there is no column below, so the preview
+// pane shows the highlighted entity's properties instead of a list.
 func RenderBrowse(state *nav.State, width, height int) string {
-	colWidth := (width - 3*columnGap) / 4
-	previewWidth := width - 3*colWidth - 3*columnGap
+	available := width - 2*columnGap
+	parentWidth := available * 20 / 100
+	currentWidth := available * 30 / 100
+	previewWidth := available - parentWidth - currentWidth
 	gap := gapColumn(height)
 
-	cols := []string{
-		renderColumn("Namespace", state.VisibleItems(nav.ColumnNamespace), state.SelectedIndex(nav.ColumnNamespace), state.Focus == nav.ColumnNamespace, colWidth, height),
-		gap,
-		renderColumn("Kind", state.VisibleItems(nav.ColumnKind), state.SelectedIndex(nav.ColumnKind), state.Focus == nav.ColumnKind, colWidth, height),
-		gap,
-		renderColumn("Entity", state.VisibleItems(nav.ColumnEntity), state.SelectedIndex(nav.ColumnEntity), state.Focus == nav.ColumnEntity, colWidth, height),
-		gap,
-		renderPreviewColumn(state.SelectedEntity(), "(no entity selected)", previewWidth, height),
+	var parentPane string
+	if state.Focus == nav.ColumnNamespace {
+		parentPane = renderEmptyColumn(parentWidth, height)
+	} else {
+		parentCol := state.Focus - 1
+		parentPane = renderColumn(columnTitle(parentCol), state.VisibleItems(parentCol), state.SelectedIndex(parentCol), false, parentWidth, height)
 	}
-	return lipgloss.JoinHorizontal(lipgloss.Top, cols...)
+	currentPane := renderColumn(columnTitle(state.Focus), state.VisibleItems(state.Focus), state.SelectedIndex(state.Focus), true, currentWidth, height)
+
+	var previewPane string
+	if state.Focus == nav.ColumnEntity {
+		previewPane = renderPreviewColumn(state.SelectedEntity(), "(no entity selected)", previewWidth, height)
+	} else {
+		childCol := state.Focus + 1
+		previewPane = renderColumn(columnTitle(childCol), state.VisibleItems(childCol), state.SelectedIndex(childCol), false, previewWidth, height)
+	}
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, parentPane, gap, currentPane, gap, previewPane)
+}
+
+// columnTitle returns the display title for a nav.Column.
+func columnTitle(col nav.Column) string {
+	switch col {
+	case nav.ColumnNamespace:
+		return "Namespace"
+	case nav.ColumnKind:
+		return "Kind"
+	default:
+		return "Entity"
+	}
+}
+
+// renderEmptyColumn renders a blank parent pane for when focus is on the
+// topmost Miller column (Namespace) and there is nothing above it to show.
+func renderEmptyColumn(width, height int) string {
+	var b strings.Builder
+	b.WriteString(columnTitleStyle.Render(""))
+	b.WriteString("\n")
+	b.WriteString(dimStyle.Render("  (top level)"))
+	return lipgloss.NewStyle().Width(width).Height(height).Render(b.String())
 }
 
 // RenderBookmarks renders the bookmark picker (ctrl+l): a scrollable list of

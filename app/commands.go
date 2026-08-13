@@ -23,14 +23,14 @@ func loadNamespacesCmd(c *client.Client) tea.Cmd {
 func loadKindsCmd(c *client.Client, namespace string) tea.Cmd {
 	return func() tea.Msg {
 		kinds, err := query.ListKinds(context.Background(), c, namespace)
-		return kindsLoadedMsg{kinds: kinds, err: err}
+		return kindsLoadedMsg{namespace: namespace, kinds: kinds, err: err}
 	}
 }
 
 func loadEntitiesCmd(c *client.Client, namespace, kind, cursor string, appendPage bool) tea.Cmd {
 	return func() tea.Msg {
 		page, err := query.ListEntitiesPage(context.Background(), c, namespace, kind, cursor, entityPageSize)
-		return entitiesLoadedMsg{page: page, appendPage: appendPage, err: err}
+		return entitiesLoadedMsg{namespace: namespace, kind: kind, page: page, appendPage: appendPage, err: err}
 	}
 }
 

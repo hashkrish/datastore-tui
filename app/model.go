@@ -129,19 +129,38 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.nav.SetNamespaces(msg.namespaces)
-		return m, nil
+		return m, m.previewCmd()
 
 	case kindsLoadedMsg:
 		if msg.err != nil {
 			m.err = msg.err
 			return m, nil
 		}
+		// The namespace this page was fetched for may no longer be the one
+		// highlighted (fast j/k scrolling fires overlapping preview fetches
+		// that can resolve out of order) — drop it rather than show kinds
+		// for the wrong namespace.
+		if ns, ok := m.nav.SelectedNamespace(); !ok || ns != msg.namespace {
+			return m, nil
+		}
 		m.nav.SetKinds(msg.kinds)
+		// If this landed a real drill-in (Focus is now Kind, not just a
+		// Namespace-focused preview fetch), the Entity preview pane needs
+		// data for whichever kind SetKinds just selected.
+		if m.nav.Focus == nav.ColumnKind {
+			return m, m.previewCmd()
+		}
 		return m, nil
 
 	case entitiesLoadedMsg:
 		if msg.err != nil {
 			m.err = msg.err
+			return m, nil
+		}
+		if kind, ok := m.nav.SelectedKind(); !ok || kind != msg.kind {
+			return m, nil
+		}
+		if ns, ok := m.nav.SelectedNamespace(); !ok || ns != msg.namespace {
 			return m, nil
 		}
 		m.nav.SetEntitiesPage(msg.page, msg.appendPage)

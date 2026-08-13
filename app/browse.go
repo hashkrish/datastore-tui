@@ -24,33 +24,33 @@ func (m *Model) updateBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.chordG.Reset()
 		m.chordD.Reset()
 		m.nav.MoveBy(1)
-		return m, nil
+		return m, m.previewCmd()
 
 	case key.Matches(msg, km.Up):
 		m.chordG.Reset()
 		m.chordD.Reset()
 		m.nav.MoveBy(-1)
-		return m, nil
+		return m, m.previewCmd()
 
 	case key.Matches(msg, km.Top):
 		if m.chordG.Complete('g') {
 			m.nav.MoveToTop()
-		} else {
-			m.chordG.Arm('g')
+			return m, m.previewCmd()
 		}
+		m.chordG.Arm('g')
 		return m, nil
 
 	case key.Matches(msg, km.Bottom):
 		m.nav.MoveToBottom()
-		return m, nil
+		return m, m.previewCmd()
 
 	case key.Matches(msg, km.HalfPageDown):
 		m.nav.MoveBy(m.halfPage())
-		return m, nil
+		return m, m.previewCmd()
 
 	case key.Matches(msg, km.HalfPageUp):
 		m.nav.MoveBy(-m.halfPage())
-		return m, nil
+		return m, m.previewCmd()
 
 	case key.Matches(msg, km.Filter):
 		m.filterInput.SetValue(m.nav.Filter())
@@ -62,7 +62,7 @@ func (m *Model) updateBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, km.Left):
 		m.chordD.Reset()
 		m.nav.FocusLeft()
-		return m, nil
+		return m, m.previewCmd()
 
 	case key.Matches(msg, km.Right), key.Matches(msg, km.Open):
 		return m.drillIn()
@@ -102,6 +102,37 @@ func (m *Model) updateBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.chordG.Reset()
 		m.chordD.Reset()
 		return m, nil
+	}
+}
+
+// previewCmd fetches data for whatever renders in RenderBrowse's preview
+// pane — the column one level below focus — keyed to whichever item is
+// currently highlighted, so scrolling through Namespace or Kind shows that
+// item's children live without drilling in. It's a no-op once focus reaches
+// the Entity column: the preview there is the already-loaded entity's own
+// properties, nothing to fetch.
+func (m *Model) previewCmd() tea.Cmd {
+	switch m.nav.Focus {
+	case nav.ColumnNamespace:
+		ns, ok := m.nav.SelectedNamespace()
+		if !ok {
+			return nil
+		}
+		return loadKindsCmd(m.client, ns)
+
+	case nav.ColumnKind:
+		ns, ok := m.nav.SelectedNamespace()
+		if !ok {
+			return nil
+		}
+		kind, ok := m.nav.SelectedKind()
+		if !ok {
+			return nil
+		}
+		return loadEntitiesCmd(m.client, ns, kind, "", false)
+
+	default:
+		return nil
 	}
 }
 
@@ -183,7 +214,7 @@ func (m *Model) updateFilterInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		m.nav.SetFilter(m.filterInput.Value())
 		m.screen = screenBrowse
-		return m, nil
+		return m, m.previewCmd()
 	case "esc":
 		m.screen = screenBrowse
 		return m, nil

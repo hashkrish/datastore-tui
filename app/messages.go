@@ -13,12 +13,21 @@ type namespacesLoadedMsg struct {
 	err        error
 }
 
+// namespace records which namespace this page of kinds was fetched for, so
+// Update can drop a response that arrives after the highlighted namespace
+// has since moved on (e.g. fast j/k scrolling firing overlapping preview
+// fetches out of order).
 type kindsLoadedMsg struct {
-	kinds []string
-	err   error
+	namespace string
+	kinds     []string
+	err       error
 }
 
+// namespace/kind record what this page of entities was fetched for, so
+// Update can drop a stale response the same way kindsLoadedMsg does.
 type entitiesLoadedMsg struct {
+	namespace  string
+	kind       string
 	page       *client.QueryPage
 	appendPage bool
 	err        error
