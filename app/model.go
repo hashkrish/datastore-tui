@@ -3,6 +3,8 @@
 package app
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
@@ -344,11 +346,33 @@ func (m *Model) viewStatus() string {
 	if m.dirty.Dirty() {
 		dirtyMark = " [modified]"
 	}
-	help := "j/k move  ctrl+u/d half page  l/enter open  h back  t retype  / filter  o new  dd delete  ctrl+s save  r refresh  ctrl+b bookmark  ctrl+l bookmarks  ? help  q quit"
-	if m.status != "" {
-		return style.Render(m.status + dirtyMark + "  " + help)
+
+	segs := make([]string, 0, 3)
+	if info := m.currentInfo(); info != "" {
+		segs = append(segs, info)
 	}
-	return style.Render(help + dirtyMark)
+	if m.status != "" {
+		segs = append(segs, m.status+dirtyMark)
+	} else if dirtyMark != "" {
+		segs = append(segs, strings.TrimSpace(dirtyMark))
+	}
+	segs = append(segs, "?")
+
+	return style.Render(strings.Join(segs, "  "))
+}
+
+// currentInfo returns the bottom status line's "where am I" text: the
+// namespace/kind/entity breadcrumb while browsing, replacing the job the
+// now-removed column headers used to do. Other screens already show their
+// own context (e.g. the detail view's breadcrumb at the top), so this is
+// empty there.
+func (m *Model) currentInfo() string {
+	switch m.screen {
+	case screenBrowse, screenFilterInput:
+		return panes.FormatBrowseBreadcrumb(m.nav)
+	default:
+		return ""
+	}
 }
 
 func entityLabel(e *model.Entity) string {

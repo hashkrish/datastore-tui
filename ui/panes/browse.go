@@ -18,9 +18,12 @@ const accentColor = lipgloss.Color("25") // muted blue
 // in for the border that used to mark their edges.
 const columnGap = 1
 
+// focusedStyle marks the currently-focused Miller column in the status-line
+// breadcrumb (FormatBrowseBreadcrumb) — the role the column headers used to
+// play before they were removed for eating a row that mattered once a
+// column's item count exceeded the pane's height.
 var (
-	columnTitleStyle        = lipgloss.NewStyle().Bold(true).Padding(0, 1)
-	focusedColumnTitleStyle = columnTitleStyle.Foreground(accentColor)
+	focusedStyle = lipgloss.NewStyle().Bold(true).Foreground(accentColor)
 
 	selectedRowStyle = lipgloss.NewStyle().
 				Background(accentColor).
@@ -39,7 +42,9 @@ var (
 // Kind/Entity/entity-property-preview. At the top of the hierarchy (Focus ==
 // ColumnNamespace) there is no parent, so that pane renders blank; at the
 // bottom (Focus == ColumnEntity) there is no column below, so the preview
-// pane shows the highlighted entity's properties instead of a list.
+// pane shows the highlighted entity's properties instead of a list. Panes
+// have no header row — see FormatBrowseBreadcrumb for the "where am I"
+// context shown in the status line instead.
 func RenderBrowse(state *nav.State, width, height int) string {
 	available := width - 2*columnGap
 	parentWidth := available * 20 / 100
@@ -52,22 +57,23 @@ func RenderBrowse(state *nav.State, width, height int) string {
 		parentPane = renderEmptyColumn(parentWidth, height)
 	} else {
 		parentCol := state.Focus - 1
-		parentPane = renderColumn(columnTitle(parentCol), state.VisibleItems(parentCol), state.SelectedIndex(parentCol), false, parentWidth, height)
+		parentPane = renderColumn(state.VisibleItems(parentCol), state.SelectedIndex(parentCol), parentWidth, height)
 	}
-	currentPane := renderColumn(columnTitle(state.Focus), state.VisibleItems(state.Focus), state.SelectedIndex(state.Focus), true, currentWidth, height)
+	currentPane := renderColumn(state.VisibleItems(state.Focus), state.SelectedIndex(state.Focus), currentWidth, height)
 
 	var previewPane string
 	if state.Focus == nav.ColumnEntity {
 		previewPane = renderPreviewColumn(state.SelectedEntity(), "(no entity selected)", previewWidth, height)
 	} else {
 		childCol := state.Focus + 1
-		previewPane = renderColumn(columnTitle(childCol), state.VisibleItems(childCol), state.SelectedIndex(childCol), false, previewWidth, height)
+		previewPane = renderColumn(state.VisibleItems(childCol), state.SelectedIndex(childCol), previewWidth, height)
 	}
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, parentPane, gap, currentPane, gap, previewPane)
 }
 
-// columnTitle returns the display title for a nav.Column.
+// columnTitle returns the display label for a nav.Column, used by
+// FormatBrowseBreadcrumb (the status line), not by the panes themselves.
 func columnTitle(col nav.Column) string {
 	switch col {
 	case nav.ColumnNamespace:
@@ -79,14 +85,38 @@ func columnTitle(col nav.Column) string {
 	}
 }
 
+// FormatBrowseBreadcrumb renders the currently highlighted
+// namespace/kind/entity as "namespace / kind / entity" for the bottom
+// status line, with whichever segment is focused highlighted — replacing
+// the "where am I" job the removed column headers used to do. A segment
+// with nothing selected yet renders as "-".
+func FormatBrowseBreadcrumb(state *nav.State) string {
+	ns, _ := state.SelectedNamespace()
+	kind, _ := state.SelectedKind()
+	entity := ""
+	if e := state.SelectedEntity(); e != nil {
+		entity = e.Key.Last().String()
+	}
+
+	segs := []string{ns, kind, entity}
+	cols := []nav.Column{nav.ColumnNamespace, nav.ColumnKind, nav.ColumnEntity}
+	for i, col := range cols {
+		text := segs[i]
+		if text == "" {
+			text = "-"
+		}
+		if state.Focus == col {
+			text = focusedStyle.Render(columnTitle(col) + ": " + text)
+		}
+		segs[i] = text
+	}
+	return strings.Join(segs, " / ")
+}
+
 // renderEmptyColumn renders a blank parent pane for when focus is on the
 // topmost Miller column (Namespace) and there is nothing above it to show.
 func renderEmptyColumn(width, height int) string {
-	var b strings.Builder
-	b.WriteString(columnTitleStyle.Render(""))
-	b.WriteString("\n")
-	b.WriteString(dimStyle.Render("  (top level)"))
-	return lipgloss.NewStyle().Width(width).Height(height).Render(b.String())
+	return lipgloss.NewStyle().Width(width).Height(height).Render(dimStyle.Render("  (top level)"))
 }
 
 // RenderBookmarks renders the bookmark picker (ctrl+l): a scrollable list of
@@ -99,7 +129,7 @@ func RenderBookmarks(labels []string, selected int, preview *model.Entity, loadi
 	colWidth := (width - columnGap) / 3
 	previewWidth := width - colWidth - columnGap
 
-	listCol := renderColumn("Bookmarks", labels, selected, true, colWidth, height)
+	listCol := renderColumn(labels, selected, colWidth, height)
 
 	emptyMessage := "(entity not found)"
 	if loading {
@@ -120,8 +150,6 @@ func gapColumn(height int) string {
 // emptyMessage is shown in place of the property list when e is nil.
 func renderPreviewColumn(e *model.Entity, emptyMessage string, width, height int) string {
 	var b strings.Builder
-	b.WriteString(columnTitleStyle.Render("Preview"))
-	b.WriteString("\n")
 
 	if e == nil {
 		b.WriteString(dimStyle.Render("  " + emptyMessage))
@@ -137,7 +165,7 @@ func renderPreviewColumn(e *model.Entity, emptyMessage string, width, height int
 	case len(rows) == 0:
 		b.WriteString(dimStyle.Render("  (no properties)"))
 	default:
-		visibleRows := max(height-2, 1) // minus title + key line
+		visibleRows := max(height-1, 1) // minus the key line
 		for i, row := range rows {
 			if i >= visibleRows {
 				break
@@ -151,22 +179,15 @@ func renderPreviewColumn(e *model.Entity, emptyMessage string, width, height int
 	return lipgloss.NewStyle().Width(width).Height(height).Render(b.String())
 }
 
-func renderColumn(title string, items []string, selected int, focused bool, width, height int) string {
-	titleStyle := columnTitleStyle
-	if focused {
-		titleStyle = focusedColumnTitleStyle
-	}
-
+func renderColumn(items []string, selected int, width, height int) string {
 	var b strings.Builder
-	b.WriteString(titleStyle.Render(title))
-	b.WriteString("\n")
 
 	if len(items) == 0 {
 		b.WriteString(dimStyle.Render("  (empty)"))
 	} else {
 		// Keep the selected row within view by windowing when the list is
 		// taller than the available rows.
-		visibleRows := max(height-1, 1) // minus the title line
+		visibleRows := max(height, 1)
 		start := 0
 		if selected >= visibleRows {
 			start = selected - visibleRows + 1
