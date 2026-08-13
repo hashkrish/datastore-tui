@@ -30,6 +30,7 @@ const (
 	screenConfirmDeleteEntity
 	screenConfirmDeleteItem
 	screenConfirmQuit
+	screenConfirmRefresh
 	screenBookmarks
 	screenHelp
 )
@@ -222,7 +223,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.updateNewEntityKey(msg)
 	case screenBookmarks:
 		return m.updateBookmarkList(msg)
-	case screenConfirmDeleteEntity, screenConfirmDeleteItem, screenConfirmQuit:
+	case screenConfirmDeleteEntity, screenConfirmDeleteItem, screenConfirmQuit, screenConfirmRefresh:
 		return m.updateConfirm(msg)
 	case screenHelp:
 		m.screen = m.prevScreen
@@ -247,7 +248,7 @@ func (m *Model) viewBody() string {
 		return panes.RenderBrowse(m.nav, m.width, contentHeight-1) + "\n" + m.filterInput.View()
 	case screenDetailFilterInput:
 		return m.viewDetailScreen(contentHeight-1) + "\n" + m.filterInput.View()
-	case screenDetail, screenEditLeaf, screenNewItemType, screenNewItemValue, screenConfirmDeleteItem:
+	case screenDetail, screenEditLeaf, screenNewItemType, screenNewItemValue, screenConfirmDeleteItem, screenConfirmRefresh:
 		return m.viewDetailScreen(contentHeight)
 	case screenNewEntityKey:
 		return m.newEntityKeyForm.View()
@@ -290,7 +291,7 @@ func (m *Model) viewDetailScreen(height int) string {
 	// available height for rows.
 	reserve := 0
 	switch m.screen {
-	case screenEditLeaf, screenNewItemValue, screenNewItemType, screenConfirmDeleteItem:
+	case screenEditLeaf, screenNewItemValue, screenNewItemType, screenConfirmDeleteItem, screenConfirmRefresh:
 		reserve = 1
 	}
 	base := panes.RenderDetail(breadcrumb, rows, m.detailSelected, m.width, height-reserve)
@@ -304,6 +305,8 @@ func (m *Model) viewDetailScreen(height int) string {
 		return base + "\n" + m.newItemTypeForm.View()
 	case screenConfirmDeleteItem:
 		return base + "\n\nDelete this item? Press y to confirm, any other key to cancel."
+	case screenConfirmRefresh:
+		return base + "\n\nReloading will discard your unsaved changes. Press y to reload from the database, any other key to cancel."
 	}
 	return base
 }
@@ -317,7 +320,7 @@ func (m *Model) viewStatus() string {
 	if m.dirty.Dirty() {
 		dirtyMark = " [modified]"
 	}
-	help := "j/k move  ctrl+u/d half page  l/enter open  h back  t retype  / filter  o new  dd delete  ctrl+s save  ctrl+b bookmark  ctrl+l bookmarks  ? help  q quit"
+	help := "j/k move  ctrl+u/d half page  l/enter open  h back  t retype  / filter  o new  dd delete  ctrl+s save  r refresh  ctrl+b bookmark  ctrl+l bookmarks  ? help  q quit"
 	if m.status != "" {
 		return style.Render(m.status + dirtyMark + "  " + help)
 	}
@@ -358,6 +361,7 @@ Detail mode (viewing/editing an entity):
   /              filter the current scope's properties
   o              add array item (when viewing an array)
   dd             delete array item (when viewing an array)
+  r              reload from the database (confirms first if you have unsaved edits)
   ctrl+]         open the entity a selected Key property points at
   ctrl+b         bookmark/unbookmark the current entity
   ctrl+l         open bookmarks (jump to a bookmarked entity)

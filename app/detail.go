@@ -74,6 +74,10 @@ func (m *Model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, km.AddItem):
 		return m.startAddItem()
 
+	case key.Matches(msg, km.Refresh):
+		m.chordD.Reset()
+		return m.startRefreshEntity()
+
 	case key.Matches(msg, km.GoToKey):
 		m.chordD.Reset()
 		return m.followKeyProperty()
@@ -176,6 +180,29 @@ func (m *Model) goToKey(key *model.Key) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.status = "loading..."
+	return m, lookupKeyCmd(m.client, key)
+}
+
+// startRefreshEntity implements "r" in detail mode: reloads the current
+// entity from the database. Local edits, if any, would otherwise be
+// silently overwritten by whatever the reload fetches, so a dirty entity is
+// held behind a confirm (screenConfirmRefresh) instead of reloading
+// straight away; a clean one reloads immediately.
+func (m *Model) startRefreshEntity() (tea.Model, tea.Cmd) {
+	if m.currentEntity == nil {
+		return m, nil
+	}
+	key := m.currentEntity.Key
+	if m.dirty.Dirty() {
+		m.prevScreen = screenDetail
+		m.confirmYes = func(mm *Model) (tea.Model, tea.Cmd) {
+			mm.status = "refreshing..."
+			return mm, lookupKeyCmd(mm.client, key)
+		}
+		m.screen = screenConfirmRefresh
+		return m, nil
+	}
+	m.status = "refreshing..."
 	return m, lookupKeyCmd(m.client, key)
 }
 

@@ -71,6 +71,7 @@ type DetailKeyMap struct {
 	AddItem                  key.Binding // o on an array: append item
 	DeleteItem               key.Binding // dd on an array item: remove it
 	Save                     key.Binding // ctrl+s: commit pending edits
+	Refresh                  key.Binding // r: reload the current entity from the database
 	GoToKey                  key.Binding // ctrl+]: open the entity a Key-typed property points at
 	ToggleBookmark           key.Binding // ctrl+b: bookmark/unbookmark the current entity
 	ListBookmarks            key.Binding // ctrl+l: open the bookmark picker
@@ -92,6 +93,7 @@ func DefaultDetailKeyMap() DetailKeyMap {
 		AddItem:        key.NewBinding(key.WithKeys("o"), key.WithHelp("o", "add item")),
 		DeleteItem:     key.NewBinding(key.WithKeys("d"), key.WithHelp("dd", "delete item")),
 		Save:           key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "save")),
+		Refresh:        key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "refresh")),
 		GoToKey:        key.NewBinding(key.WithKeys("ctrl+]"), key.WithHelp("ctrl+]", "go to key")),
 		ToggleBookmark: key.NewBinding(key.WithKeys("ctrl+b"), key.WithHelp("ctrl+b", "bookmark")),
 		ListBookmarks:  key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "bookmarks")),
