@@ -312,7 +312,12 @@ func (m *Model) viewDetailScreen(height int) string {
 }
 
 func (m *Model) viewStatus() string {
-	style := lipgloss.NewStyle().Padding(0, 1)
+	// MaxWidth clips to exactly one line instead of word-wrapping: the
+	// status/help text (or an error message) routinely exceeds narrower
+	// terminal widths, and a wrapped second line silently pushes the whole
+	// frame one row past the terminal height, scrolling the top border out
+	// of view.
+	style := lipgloss.NewStyle().Padding(0, 1).MaxWidth(m.width)
 	if m.err != nil {
 		return style.Foreground(lipgloss.Color("196")).Render("error: " + m.err.Error())
 	}

@@ -53,10 +53,10 @@ func filterDetailRows(rows []panes.DetailRow, filter string) []panes.DetailRow {
 }
 
 // halfPage estimates a "half screen" of rows for ctrl+u/ctrl+d scrolling,
-// based on the terminal height minus the chrome (borders, titles, status
+// based on the terminal height minus the chrome (column titles, status
 // line) that each list view renders around its rows.
 func (m *Model) halfPage() int {
-	rows := (m.height - 4) / 2
+	rows := (m.height - 2) / 2
 	if rows < 1 {
 		return 1
 	}
