@@ -113,6 +113,7 @@ type Model struct {
 
 	chordG keymap.Chord
 	chordD keymap.Chord
+	chordY keymap.Chord
 
 	confirmYes func(*Model) (tea.Model, tea.Cmd)
 
@@ -536,6 +537,7 @@ Browse mode:
                  (press again to AND another filter onto the current query)
   C              clear all active filters
   O              order: sort the current kind's entities by a property
+  yy             copy the selected entity's key to the clipboard
   ctrl+l         open bookmarks (jump to a bookmarked entity)
   q, ctrl+c      quit
   (right pane previews the highlighted entity's properties)
@@ -561,6 +563,7 @@ Detail mode (viewing/editing an entity):
   dd             delete array item (when viewing an array)
   r              reload from the database (confirms first if you have unsaved edits)
   ctrl+]         open the entity a selected Key property points at
+  yy             copy the selected property's value to the clipboard
   ctrl+b         bookmark/unbookmark the current entity
   ctrl+l         open bookmarks (jump to a bookmarked entity)
   w              save pending edits

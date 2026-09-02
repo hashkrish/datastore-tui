@@ -35,6 +35,7 @@ type BrowseKeyMap struct {
 	Query                    key.Binding // Q: filter the current kind's entities by a property (AND-combines if pressed again)
 	ClearFilters             key.Binding // C: clear all active AND filters
 	Order                    key.Binding // O: order the current kind's entities by a property
+	Yank                     key.Binding // first "y" of "yy": copy the selected entity's key
 	Quit                     key.Binding
 	Help                     key.Binding
 	PendingG                 key.Binding // first "g" of "gg"
@@ -60,6 +61,7 @@ func DefaultBrowseKeyMap() BrowseKeyMap {
 		Query:         key.NewBinding(key.WithKeys("Q"), key.WithHelp("Q", "query")),
 		ClearFilters:  key.NewBinding(key.WithKeys("C"), key.WithHelp("C", "clear filters")),
 		Order:         key.NewBinding(key.WithKeys("O"), key.WithHelp("O", "order")),
+		Yank:          key.NewBinding(key.WithKeys("y"), key.WithHelp("yy", "copy key")),
 		Quit:          key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
 		Help:          key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 	}
@@ -81,6 +83,7 @@ type DetailKeyMap struct {
 	GoToKey                  key.Binding // ctrl+]: open the entity a Key-typed property points at
 	ToggleBookmark           key.Binding // ctrl+b: bookmark/unbookmark the current entity
 	ListBookmarks            key.Binding // ctrl+l: open the bookmark picker
+	Yank                     key.Binding // first "y" of "yy": copy the selected property's value
 	Quit                     key.Binding
 	Help                     key.Binding
 }
@@ -104,6 +107,7 @@ func DefaultDetailKeyMap() DetailKeyMap {
 		GoToKey:        key.NewBinding(key.WithKeys("ctrl+]"), key.WithHelp("ctrl+]", "go to key")),
 		ToggleBookmark: key.NewBinding(key.WithKeys("ctrl+b"), key.WithHelp("ctrl+b", "bookmark")),
 		ListBookmarks:  key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "bookmarks")),
+		Yank:           key.NewBinding(key.WithKeys("y"), key.WithHelp("yy", "copy value")),
 		Quit:           key.NewBinding(key.WithKeys("q", "esc"), key.WithHelp("q/esc", "back to browse")),
 		Help:           key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 	}

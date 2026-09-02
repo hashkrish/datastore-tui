@@ -23,12 +23,14 @@ func (m *Model) updateBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, km.Down):
 		m.chordG.Reset()
 		m.chordD.Reset()
+		m.chordY.Reset()
 		m.nav.MoveBy(1)
 		return m, m.previewCmd()
 
 	case key.Matches(msg, km.Up):
 		m.chordG.Reset()
 		m.chordD.Reset()
+		m.chordY.Reset()
 		m.nav.MoveBy(-1)
 		return m, m.previewCmd()
 
@@ -61,6 +63,7 @@ func (m *Model) updateBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, km.Left):
 		m.chordD.Reset()
+		m.chordY.Reset()
 		m.nav.FocusLeft()
 		return m, m.previewCmd()
 
@@ -107,9 +110,20 @@ func (m *Model) updateBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case key.Matches(msg, km.Yank):
+		if m.nav.Focus != nav.ColumnEntity {
+			return m, nil
+		}
+		if m.chordY.Complete('y') {
+			return m.yankSelectedKey()
+		}
+		m.chordY.Arm('y')
+		return m, nil
+
 	default:
 		m.chordG.Reset()
 		m.chordD.Reset()
+		m.chordY.Reset()
 		return m, nil
 	}
 }

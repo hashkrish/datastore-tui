@@ -28,6 +28,7 @@ func (m *Model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, km.Up):
 		m.chordD.Reset()
+		m.chordY.Reset()
 		if m.detailSelected > 0 {
 			m.detailSelected--
 		}
@@ -35,6 +36,7 @@ func (m *Model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, km.Down):
 		m.chordD.Reset()
+		m.chordY.Reset()
 		_, rows, err := m.currentScope()
 		if err == nil && m.detailSelected < len(rows)-1 {
 			m.detailSelected++
@@ -43,6 +45,7 @@ func (m *Model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, km.HalfPageDown):
 		m.chordD.Reset()
+		m.chordY.Reset()
 		_, rows, err := m.currentScope()
 		if err == nil {
 			m.detailSelected = min(m.detailSelected+m.halfPage(), max(0, len(rows)-1))
@@ -51,15 +54,18 @@ func (m *Model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, km.HalfPageUp):
 		m.chordD.Reset()
+		m.chordY.Reset()
 		m.detailSelected = max(0, m.detailSelected-m.halfPage())
 		return m, nil
 
 	case key.Matches(msg, km.Expand):
 		m.chordD.Reset()
+		m.chordY.Reset()
 		return m.detailExpand()
 
 	case key.Matches(msg, km.Retype):
 		m.chordD.Reset()
+		m.chordY.Reset()
 		return m.startRetype()
 
 	case key.Matches(msg, km.Filter):
@@ -81,18 +87,22 @@ func (m *Model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, km.Refresh):
 		m.chordD.Reset()
+		m.chordY.Reset()
 		return m.startRefreshEntity()
 
 	case key.Matches(msg, km.GoToKey):
 		m.chordD.Reset()
+		m.chordY.Reset()
 		return m.followKeyProperty()
 
 	case key.Matches(msg, km.ToggleBookmark):
 		m.chordD.Reset()
+		m.chordY.Reset()
 		return m.toggleBookmark()
 
 	case key.Matches(msg, km.ListBookmarks):
 		m.chordD.Reset()
+		m.chordY.Reset()
 		return m.startBookmarkList()
 
 	case key.Matches(msg, km.DeleteItem):
@@ -102,8 +112,16 @@ func (m *Model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.chordD.Arm('d')
 		return m, nil
 
+	case key.Matches(msg, km.Yank):
+		if m.chordY.Complete('y') {
+			return m.yankSelectedValue()
+		}
+		m.chordY.Arm('y')
+		return m, nil
+
 	default:
 		m.chordD.Reset()
+		m.chordY.Reset()
 		return m, nil
 	}
 }
