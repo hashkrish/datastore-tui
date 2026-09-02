@@ -56,7 +56,7 @@ func NewFieldEditor(v model.Value, width int) (*FieldEditor, bool) {
 	case model.KindString:
 		e.strVal = v.StringValue
 		e.form = huh.NewForm(huh.NewGroup(
-			huh.NewText().Title("String value").Value(&e.strVal),
+			huh.NewText().Title("String value").Value(&e.strVal).EditorExtension(editorExtensionFor(e.strVal)),
 		))
 	case model.KindBoolean:
 		e.boolVal = v.BooleanValue
@@ -90,12 +90,12 @@ func NewFieldEditor(v model.Value, width int) (*FieldEditor, bool) {
 			e.blobShowable = true
 			e.blobVal = text
 			e.form = huh.NewForm(huh.NewGroup(
-				huh.NewText().Title(blobEditTitle(text)).Value(&e.blobVal),
+				huh.NewText().Title(blobEditTitle(text)).Value(&e.blobVal).EditorExtension(editorExtensionFor(text)),
 			))
 		} else {
 			e.blobVal = base64.StdEncoding.EncodeToString(v.BlobValue)
 			e.form = huh.NewForm(huh.NewGroup(
-				huh.NewText().Title("Blob value (base64)").Value(&e.blobVal).Validate(validateBase64),
+				huh.NewText().Title("Blob value (base64)").Value(&e.blobVal).Validate(validateBase64).EditorExtension(""),
 			))
 		}
 	case model.KindKey:
@@ -234,6 +234,17 @@ func validateTimestamp(s string) error {
 func validateBase64(s string) error {
 	_, err := base64.StdEncoding.DecodeString(s)
 	return err
+}
+
+// editorExtensionFor picks the ctrl+e external-editor temp file's extension
+// based on s's content, so the editor's syntax highlighting (if any) matches
+// what's actually being edited instead of huh's ".md" default. Anything that
+// isn't valid JSON gets no extension at all.
+func editorExtensionFor(s string) string {
+	if json.Valid([]byte(s)) {
+		return "json"
+	}
+	return ""
 }
 
 // decodeBlobText decodes b to text for editing when it's displayable —

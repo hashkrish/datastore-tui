@@ -32,7 +32,9 @@ type BrowseKeyMap struct {
 	Refresh                  key.Binding
 	Open                     key.Binding
 	ListBookmarks            key.Binding // ctrl+l: open the bookmark picker
-	Query                    key.Binding // Q: filter the current kind's entities by a property
+	Query                    key.Binding // Q: filter the current kind's entities by a property (AND-combines if pressed again)
+	ClearFilters             key.Binding // C: clear all active AND filters
+	Order                    key.Binding // O: order the current kind's entities by a property
 	Quit                     key.Binding
 	Help                     key.Binding
 	PendingG                 key.Binding // first "g" of "gg"
@@ -56,6 +58,8 @@ func DefaultBrowseKeyMap() BrowseKeyMap {
 		Open:          key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open")),
 		ListBookmarks: key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "bookmarks")),
 		Query:         key.NewBinding(key.WithKeys("Q"), key.WithHelp("Q", "query")),
+		ClearFilters:  key.NewBinding(key.WithKeys("C"), key.WithHelp("C", "clear filters")),
+		Order:         key.NewBinding(key.WithKeys("O"), key.WithHelp("O", "order")),
 		Quit:          key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
 		Help:          key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 	}

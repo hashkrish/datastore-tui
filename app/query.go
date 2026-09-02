@@ -90,7 +90,10 @@ func formatFilterValue(v model.Value) string {
 // m.namespace, mirroring what drillIn does when entering a kind normally.
 // The form itself isn't built until the __property__ metadata query
 // (loadPropertiesCmd) resolves, so the property field can offer a pick-list
-// instead of a free-text name — see openQueryFilterForm.
+// instead of a free-text name — see openQueryFilterForm. If activeFilters
+// already holds one or more filters from an earlier "Q", the one this flow
+// builds is AND-combined onto it rather than replacing it — see
+// updateQueryValue.
 func (m *Model) startQuery() (tea.Model, tea.Cmd) {
 	ns, ok := m.nav.SelectedNamespace()
 	if !ok {
@@ -206,13 +209,13 @@ func (m *Model) updateQueryValue(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		filter := client.PropertyFilter{Property: m.queryProperty, Op: m.queryOp, Value: value}
-		m.activeFilter = &filter
+		m.activeFilters = append(m.activeFilters, filter)
 		m.fieldEditor = nil
 		m.nav.Focus = nav.ColumnEntity
 		m.screen = screenBrowse
 		m.status = "querying..."
 		kind, _ := m.nav.SelectedKind()
-		return m, runFilteredQueryCmd(m.client, m.namespace, kind, filter, "", false)
+		return m, runFilteredQueryCmd(m.client, m.namespace, kind, m.activeFilters, m.activeOrder, "", false)
 	case huh.StateAborted:
 		m.fieldEditor = nil
 		m.screen = screenBrowse

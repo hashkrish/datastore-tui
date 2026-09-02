@@ -67,11 +67,11 @@ func ListProperties(ctx context.Context, c *client.Client, namespace, kind strin
 	ancestor := &model.Key{NamespaceID: ns, Path: []model.PathElement{{Kind: "__kind__", Name: kind}}}
 	page, err := c.RunQuery(ctx, ns, client.Query{
 		Kind: "__property__",
-		Filter: &client.PropertyFilter{
+		Filters: []client.PropertyFilter{{
 			Property: "__key__",
 			Op:       client.OpHasAncestor,
 			Value:    model.KeyValueOf(ancestor),
-		},
+		}},
 	})
 	if err != nil {
 		return nil, err
@@ -92,35 +92,60 @@ func ListProperties(ctx context.Context, c *client.Client, namespace, kind strin
 }
 
 // ListEntitiesPage fetches one page of entities of kind within namespace,
-// ordered by key for stable pagination. Pass cursor="" for the first page;
-// subsequent pages use the EndCursor from the previous QueryPage.
-func ListEntitiesPage(ctx context.Context, c *client.Client, namespace, kind, cursor string, pageSize int32) (*client.QueryPage, error) {
-	return c.RunQuery(ctx, resolveNamespace(namespace), client.Query{
-		Kind:        kind,
-		StartCursor: cursor,
-		Limit:       pageSize,
-		Order:       []client.Order{{Property: "__key__"}},
-	})
-}
-
-// QueryEntitiesPage fetches one page of entities of kind within namespace
-// matching filter, the same shape as ListEntitiesPage but with a property
-// filter applied. Ordering by key isn't possible when filter's operator is
-// an inequality (Datastore requires the query's first sort order to match
-// the inequality-filtered property), so those queries instead order by that
-// property; equality filters keep the same by-key ordering ListEntitiesPage
-// uses for stable pagination.
-func QueryEntitiesPage(ctx context.Context, c *client.Client, namespace, kind string, filter client.PropertyFilter, cursor string, pageSize int32) (*client.QueryPage, error) {
-	order := []client.Order{{Property: "__key__"}}
-	if filter.Op != client.OpEqual {
-		order = []client.Order{{Property: filter.Property}}
+// ordered by order if given (falling back to __key__ as a tiebreaker for
+// stable pagination), or by key alone otherwise. Pass cursor="" for the
+// first page; subsequent pages use the EndCursor from the previous
+// QueryPage.
+func ListEntitiesPage(ctx context.Context, c *client.Client, namespace, kind, cursor string, pageSize int32, order *client.Order) (*client.QueryPage, error) {
+	clauses := []client.Order{{Property: "__key__"}}
+	if order != nil {
+		clauses = []client.Order{*order, {Property: "__key__"}}
 	}
 	return c.RunQuery(ctx, resolveNamespace(namespace), client.Query{
 		Kind:        kind,
 		StartCursor: cursor,
 		Limit:       pageSize,
-		Order:       order,
-		Filter:      &filter,
+		Order:       clauses,
+	})
+}
+
+// QueryEntitiesPage fetches one page of entities of kind within namespace
+// matching filters (AND-combined; must be non-empty — callers with no
+// filter should use ListEntitiesPage instead), the same shape as
+// ListEntitiesPage but with a property filter applied, plus an optional
+// user-chosen order. Ordering by key isn't possible when one of filters is
+// an inequality (Datastore requires the query's first sort order to match
+// the inequality-filtered property), so those queries order by that
+// property first, with order (if it names a different property) as a
+// secondary sort; all-equality filters put order (or __key__, if none)
+// first, same as ListEntitiesPage.
+func QueryEntitiesPage(ctx context.Context, c *client.Client, namespace, kind string, filters []client.PropertyFilter, cursor string, pageSize int32, order *client.Order) (*client.QueryPage, error) {
+	inequalityProperty := ""
+	for _, f := range filters {
+		if f.Op != client.OpEqual {
+			inequalityProperty = f.Property
+			break
+		}
+	}
+
+	var clauses []client.Order
+	switch {
+	case inequalityProperty != "":
+		clauses = []client.Order{{Property: inequalityProperty}}
+		if order != nil && order.Property != inequalityProperty {
+			clauses = append(clauses, *order)
+		}
+	case order != nil:
+		clauses = []client.Order{*order, {Property: "__key__"}}
+	default:
+		clauses = []client.Order{{Property: "__key__"}}
+	}
+	return c.RunQuery(ctx, resolveNamespace(namespace), client.Query{
+		Kind:        kind,
+		StartCursor: cursor,
+		Limit:       pageSize,
+		Order:       clauses,
+		Filters:     filters,
 	})
 }
 

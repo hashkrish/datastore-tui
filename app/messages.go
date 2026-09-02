@@ -44,6 +44,17 @@ type propertiesLoadedMsg struct {
 	err        error
 }
 
+// orderPropertiesLoadedMsg is loadOrderPropertiesCmd's result ("O" in browse
+// mode) — the same property-name lookup propertiesLoadedMsg uses for "Q",
+// but tagged separately so Update opens the order form instead of the query
+// filter form.
+type orderPropertiesLoadedMsg struct {
+	namespace  string
+	kind       string
+	properties []string
+	err        error
+}
+
 type entitySavedMsg struct {
 	err error
 }

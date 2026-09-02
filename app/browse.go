@@ -76,6 +76,12 @@ func (m *Model) updateBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, km.Query):
 		return m.startQuery()
 
+	case key.Matches(msg, km.Order):
+		return m.startOrder()
+
+	case key.Matches(msg, km.ClearFilters):
+		return m.clearFilters()
+
 	case key.Matches(msg, km.Add):
 		if m.nav.Focus == nav.ColumnEntity {
 			return m.startNewEntity()
@@ -132,7 +138,7 @@ func (m *Model) previewCmd() tea.Cmd {
 		if !ok {
 			return nil
 		}
-		return loadEntitiesCmd(m.client, ns, kind, "", false)
+		return loadEntitiesCmd(m.client, ns, kind, "", false, nil)
 
 	default:
 		return nil
@@ -157,11 +163,12 @@ func (m *Model) drillIn() (tea.Model, tea.Cmd) {
 		if !ok || !m.nav.FocusRight() {
 			return m, nil
 		}
-		// A normal drill-in always lands on the plain unfiltered list — any
-		// query filter from a previous visit to this kind's Entity column no
-		// longer applies.
-		m.activeFilter = nil
-		return m, loadEntitiesCmd(m.client, m.namespace, kind, "", false)
+		// A normal drill-in always lands on the plain unfiltered, unordered
+		// list — any query filter/order from a previous visit to this kind's
+		// Entity column no longer applies.
+		m.activeFilters = nil
+		m.activeOrder = nil
+		return m, loadEntitiesCmd(m.client, m.namespace, kind, "", false, nil)
 
 	default: // ColumnEntity
 		e := m.nav.SelectedEntity()
@@ -195,11 +202,26 @@ func (m *Model) refreshFocused() (tea.Model, tea.Cmd) {
 		if !ok {
 			return m, nil
 		}
-		if m.activeFilter != nil {
-			return m, runFilteredQueryCmd(m.client, m.namespace, kind, *m.activeFilter, "", false)
+		if len(m.activeFilters) > 0 {
+			return m, runFilteredQueryCmd(m.client, m.namespace, kind, m.activeFilters, m.activeOrder, "", false)
 		}
-		return m, loadEntitiesCmd(m.client, m.namespace, kind, "", false)
+		return m, loadEntitiesCmd(m.client, m.namespace, kind, "", false, m.activeOrder)
 	}
+}
+
+// clearFilters implements "C" in browse mode: drops every active AND filter
+// and reloads the plain (still respecting any active order) entity list.
+func (m *Model) clearFilters() (tea.Model, tea.Cmd) {
+	if len(m.activeFilters) == 0 {
+		return m, nil
+	}
+	m.activeFilters = nil
+	kind, ok := m.nav.SelectedKind()
+	if !ok {
+		return m, nil
+	}
+	m.status = "querying..."
+	return m, loadEntitiesCmd(m.client, m.namespace, kind, "", false, m.activeOrder)
 }
 
 // startNewEntity opens the key-entry form for a brand new entity ("o" on

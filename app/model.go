@@ -38,6 +38,7 @@ const (
 	screenQueryFilter
 	screenQueryValue
 	screenQueryPastePicker
+	screenOrder
 	screenHelp
 )
 
@@ -88,15 +89,27 @@ type Model struct {
 	// Query filter ("Q" in browse mode): screenQueryFilter fills in
 	// queryProperty/queryOp/queryValueKind via queryFilterForm, then
 	// screenQueryValue reuses fieldEditor to fill in the value (optionally
-	// via screenQueryPastePicker, for Key-typed values). activeFilter is
-	// non-nil once a query has run, so refreshing the Entity column re-runs
-	// it instead of reloading the plain list.
+	// via screenQueryPastePicker, for Key-typed values), appending the
+	// result to activeFilters. Pressing "Q" again while activeFilters is
+	// already non-empty adds another AND-combined filter rather than
+	// replacing it; activeFilters is non-empty once a query has run, so
+	// refreshing the Entity column re-runs it instead of reloading the plain
+	// list.
 	queryFilterForm  *huh.Form
 	queryProperty    string
 	queryOp          client.FilterOp
 	queryValueKind   model.ValueKind
 	queryPasteCursor int
-	activeFilter     *client.PropertyFilter
+	activeFilters    []client.PropertyFilter
+
+	// Order by ("O" in browse mode): screenOrder fills in orderProperty/
+	// orderDescending via orderForm, then activeOrder is set on completion.
+	// Combines with activeFilters when both are set — see
+	// query.QueryEntitiesPage.
+	orderForm       *huh.Form
+	orderProperty   string
+	orderDescending bool
+	activeOrder     *client.Order
 
 	chordG keymap.Chord
 	chordD keymap.Chord
@@ -199,6 +212,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m.openQueryFilterForm(msg.properties)
 
+	case orderPropertiesLoadedMsg:
+		m.status = ""
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		if kind, ok := m.nav.SelectedKind(); !ok || kind != msg.kind {
+			return m, nil
+		}
+		if ns, ok := m.nav.SelectedNamespace(); !ok || ns != msg.namespace {
+			return m, nil
+		}
+		return m.openOrderForm(msg.properties)
+
 	case entitySavedMsg:
 		if msg.err != nil {
 			m.err = msg.err
@@ -217,7 +244,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.status = "deleted"
 		ns, _ := m.nav.SelectedNamespace()
 		kind, _ := m.nav.SelectedKind()
-		return m, loadEntitiesCmd(m.client, ns, kind, "", false)
+		return m, loadEntitiesCmd(m.client, ns, kind, "", false, nil)
 
 	case keyLookupMsg:
 		m.status = ""
@@ -254,6 +281,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateQueryFilter(msg)
 	case screenQueryValue:
 		return m.updateQueryValue(msg)
+	case screenOrder:
+		return m.updateOrderForm(msg)
 	}
 	return m, nil
 }
@@ -285,6 +314,8 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.updateQueryValue(msg)
 	case screenQueryPastePicker:
 		return m.updateQueryPastePicker(msg)
+	case screenOrder:
+		return m.updateOrderForm(msg)
 	case screenConfirmDeleteEntity, screenConfirmDeleteItem, screenConfirmQuit, screenConfirmRefresh:
 		return m.updateConfirm(msg)
 	case screenHelp:
@@ -322,6 +353,8 @@ func (m *Model) viewBody() string {
 		return m.viewQueryValue()
 	case screenQueryPastePicker:
 		return m.viewQueryPastePicker(contentHeight)
+	case screenOrder:
+		return m.viewOrderForm()
 	case screenConfirmDeleteEntity:
 		return "Delete entity " + entityLabel(m.nav.SelectedEntity()) + "? Press y to confirm, any other key to cancel."
 	case screenConfirmQuit:
@@ -459,8 +492,19 @@ func (m *Model) currentInfo() string {
 	switch m.screen {
 	case screenBrowse, screenFilterInput:
 		info := panes.FormatBrowseBreadcrumb(m.nav)
-		if m.activeFilter != nil {
-			info += fmt.Sprintf(" (filtered: %s %s %s)", m.activeFilter.Property, filterOpSymbol(m.activeFilter.Op), formatFilterValue(m.activeFilter.Value))
+		if len(m.activeFilters) > 0 {
+			parts := make([]string, len(m.activeFilters))
+			for i, f := range m.activeFilters {
+				parts[i] = fmt.Sprintf("%s %s %s", f.Property, filterOpSymbol(f.Op), formatFilterValue(f.Value))
+			}
+			info += fmt.Sprintf(" (filtered: %s)", strings.Join(parts, " AND "))
+		}
+		if m.activeOrder != nil {
+			dir := "asc"
+			if m.activeOrder.Descending {
+				dir = "desc"
+			}
+			info += fmt.Sprintf(" (ordered by: %s %s)", m.activeOrder.Property, dir)
 		}
 		return info
 	default:
@@ -489,6 +533,9 @@ Browse mode:
   dd             delete selected entity (Entity column)
   R              refresh focused column
   Q              query: filter the current kind's entities by a property
+                 (press again to AND another filter onto the current query)
+  C              clear all active filters
+  O              order: sort the current kind's entities by a property
   ctrl+l         open bookmarks (jump to a bookmarked entity)
   q, ctrl+c      quit
   (right pane previews the highlighted entity's properties)
@@ -497,6 +544,10 @@ Query filter (Q):
   enter          confirm each step (property/operator/type, then value)
   esc            cancel back to browse
   ctrl+p         (Key values only) paste from a bookmark, with live preview
+
+Order by (O):
+  enter          confirm each step (property, then direction)
+  esc            cancel back to browse
 
 Detail mode (viewing/editing an entity):
   j/k            move between properties

@@ -8,15 +8,15 @@ import (
 
 // Query is a simplified structured query: enough to list a Kind's entities,
 // or query the __namespace__/__kind__ metadata kinds, with cursor-based
-// pagination, plus a single property filter. It intentionally does not
-// expose Datastore's full filter grammar (composite AND/OR of many
-// filters) — this TUI only ever needs one filter at a time.
+// pagination, plus any number of property filters AND-combined together. It
+// intentionally does not expose Datastore's full filter grammar (OR, nested
+// composites) — this TUI only ever needs a flat AND of property filters.
 type Query struct {
 	Kind        string
 	Limit       int32  // 0 means "server default"
 	StartCursor string // "" for the first page
 	Order       []Order
-	Filter      *PropertyFilter // nil means unfiltered
+	Filters     []PropertyFilter // empty means unfiltered; more than one is AND-combined
 }
 
 // Order is a single ASC/DESC ordering clause.
@@ -42,9 +42,9 @@ const (
 
 // PropertyFilter restricts a query to entities where Property compares to
 // Value via Op. Datastore requires that inequality operators (anything but
-// OpEqual) target only one property per query and be the first sort order —
-// since Query only ever carries one PropertyFilter, that constraint is
-// satisfied automatically and needs no separate validation here.
+// OpEqual) target only one property across the whole query and be the first
+// sort order; callers building a multi-filter Query are responsible for
+// respecting that (Datastore itself rejects a query that doesn't).
 type PropertyFilter struct {
 	Property string
 	Op       FilterOp
@@ -70,10 +70,19 @@ type wirePropertyFilter struct {
 	Value    model.Value     `json:"value"`
 }
 
-// wireFilter mirrors the REST API's Filter union; only propertyFilter is
-// populated since Query caps at one filter (see PropertyFilter's doc).
+// wireCompositeFilter mirrors the REST API's CompositeFilter: Op is always
+// "AND" here (the only combinator Query exposes), applied across Filters.
+type wireCompositeFilter struct {
+	Op      string       `json:"op"`
+	Filters []wireFilter `json:"filters"`
+}
+
+// wireFilter mirrors the REST API's Filter union: exactly one of
+// PropertyFilter (a single q.Filters entry) or CompositeFilter (two or
+// more, AND-combined) is populated.
 type wireFilter struct {
-	PropertyFilter *wirePropertyFilter `json:"propertyFilter,omitempty"`
+	PropertyFilter  *wirePropertyFilter  `json:"propertyFilter,omitempty"`
+	CompositeFilter *wireCompositeFilter `json:"compositeFilter,omitempty"`
 }
 
 type wireStructuredQuery struct {
@@ -121,6 +130,16 @@ type QueryPage struct {
 	HasMore bool
 }
 
+// propertyFilterWire converts a single PropertyFilter to its REST wire shape,
+// shared by RunQuery's single-filter and composite-filter (AND) cases.
+func propertyFilterWire(f PropertyFilter) *wirePropertyFilter {
+	return &wirePropertyFilter{
+		Property: wirePropertyRef{Name: f.Property},
+		Op:       string(f.Op),
+		Value:    f.Value,
+	}
+}
+
 // RunQuery executes q against namespace (use "" for the default namespace)
 // and returns one page of results.
 func (c *Client) RunQuery(ctx context.Context, namespace string, q Query) (*QueryPage, error) {
@@ -131,12 +150,17 @@ func (c *Client) RunQuery(ctx context.Context, namespace string, q Query) (*Quer
 	if q.Limit > 0 {
 		sq.Limit = &q.Limit
 	}
-	if q.Filter != nil {
-		sq.Filter = &wireFilter{PropertyFilter: &wirePropertyFilter{
-			Property: wirePropertyRef{Name: q.Filter.Property},
-			Op:       string(q.Filter.Op),
-			Value:    q.Filter.Value,
-		}}
+	switch len(q.Filters) {
+	case 0:
+		// unfiltered
+	case 1:
+		sq.Filter = &wireFilter{PropertyFilter: propertyFilterWire(q.Filters[0])}
+	default:
+		subs := make([]wireFilter, len(q.Filters))
+		for i, f := range q.Filters {
+			subs[i] = wireFilter{PropertyFilter: propertyFilterWire(f)}
+		}
+		sq.Filter = &wireFilter{CompositeFilter: &wireCompositeFilter{Op: "AND", Filters: subs}}
 	}
 	for _, o := range q.Order {
 		dir := "ASCENDING"

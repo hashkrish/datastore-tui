@@ -36,20 +36,32 @@ func loadPropertiesCmd(c *client.Client, namespace, kind string) tea.Cmd {
 	}
 }
 
-func loadEntitiesCmd(c *client.Client, namespace, kind, cursor string, appendPage bool) tea.Cmd {
+// loadOrderPropertiesCmd is loadPropertiesCmd's counterpart for "O" in
+// browse mode: same __property__ lookup, tagged with a distinct message
+// type so Update knows to open the order form rather than the query filter
+// form.
+func loadOrderPropertiesCmd(c *client.Client, namespace, kind string) tea.Cmd {
 	return func() tea.Msg {
-		page, err := query.ListEntitiesPage(context.Background(), c, namespace, kind, cursor, entityPageSize)
+		properties, err := query.ListProperties(context.Background(), c, namespace, kind)
+		return orderPropertiesLoadedMsg{namespace: namespace, kind: kind, properties: properties, err: err}
+	}
+}
+
+func loadEntitiesCmd(c *client.Client, namespace, kind, cursor string, appendPage bool, order *client.Order) tea.Cmd {
+	return func() tea.Msg {
+		page, err := query.ListEntitiesPage(context.Background(), c, namespace, kind, cursor, entityPageSize, order)
 		return entitiesLoadedMsg{namespace: namespace, kind: kind, page: page, appendPage: appendPage, err: err}
 	}
 }
 
 // runFilteredQueryCmd is loadEntitiesCmd's counterpart for a property-filtered
-// query ("Q" in browse mode): same entitiesLoadedMsg result, so Update's
-// existing handler and staleness guard apply unchanged regardless of
-// whether the page came from the plain list or a filter.
-func runFilteredQueryCmd(c *client.Client, namespace, kind string, filter client.PropertyFilter, cursor string, appendPage bool) tea.Cmd {
+// query ("Q" in browse mode, AND-combining every filter in filters): same
+// entitiesLoadedMsg result, so Update's existing handler and staleness guard
+// apply unchanged regardless of whether the page came from the plain list or
+// a filter.
+func runFilteredQueryCmd(c *client.Client, namespace, kind string, filters []client.PropertyFilter, order *client.Order, cursor string, appendPage bool) tea.Cmd {
 	return func() tea.Msg {
-		page, err := query.QueryEntitiesPage(context.Background(), c, namespace, kind, filter, cursor, entityPageSize)
+		page, err := query.QueryEntitiesPage(context.Background(), c, namespace, kind, filters, cursor, entityPageSize, order)
 		return entitiesLoadedMsg{namespace: namespace, kind: kind, page: page, appendPage: appendPage, err: err}
 	}
 }
