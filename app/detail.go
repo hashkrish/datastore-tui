@@ -8,6 +8,7 @@ import (
 	"github.com/krishnan/datastore-tui/datastore/query"
 	"github.com/krishnan/datastore-tui/ui/edit"
 	"github.com/krishnan/datastore-tui/ui/keymap"
+	"github.com/krishnan/datastore-tui/ui/nav"
 	"github.com/krishnan/datastore-tui/ui/panes"
 )
 
@@ -182,25 +183,75 @@ func (m *Model) followKeyProperty() (tea.Model, tea.Cmd) {
 	if err != nil || leaf.Kind != model.KindKey || leaf.KeyValue == nil {
 		return m, nil
 	}
-	return m.goToKey(leaf.KeyValue)
+	return m.goToKey(leaf.KeyValue, true)
+}
+
+// entityFrame is one entry of entityStack: the detail-view state to restore
+// when backing out of an entity reached via followKeyProperty.
+type entityFrame struct {
+	entity     *model.Entity
+	namespace  string
+	detailPath nav.DetailPath
+	selected   int
+	filter     string
+}
+
+// pushEntityFrame saves the currently open entity's detail-view state onto
+// entityStack, so detailBack can return to it later.
+func (m *Model) pushEntityFrame() {
+	m.entityStack = append(m.entityStack, entityFrame{
+		entity:     m.currentEntity,
+		namespace:  m.namespace,
+		detailPath: m.detailPath,
+		selected:   m.detailSelected,
+		filter:     m.detailFilter,
+	})
+}
+
+// popEntityFrame restores the most recently pushed frame, reporting whether
+// there was one.
+func (m *Model) popEntityFrame() bool {
+	if len(m.entityStack) == 0 {
+		return false
+	}
+	last := len(m.entityStack) - 1
+	frame := m.entityStack[last]
+	m.entityStack = m.entityStack[:last]
+
+	m.currentEntity = frame.entity
+	m.namespace = frame.namespace
+	m.detailPath = frame.detailPath
+	m.detailSelected = frame.selected
+	m.detailFilter = frame.filter
+	m.dirty.Reset()
+	return true
 }
 
 // goToKey opens the entity identified by key (fetching it first), deferring
 // to the unsaved-edit confirmation used elsewhere in detail mode if the
-// current entity is dirty.
-func (m *Model) goToKey(key *model.Key) (tea.Model, tea.Cmd) {
+// current entity is dirty. When pushHistory is true (following a Key-typed
+// property via "ctrl+]"), the current entity's detail-view state is saved
+// first so detailBack can return to it once the user backs out of the
+// followed entity's root — see entityFrame.
+func (m *Model) goToKey(key *model.Key, pushHistory bool) (tea.Model, tea.Cmd) {
 	if key == nil {
 		return m, nil
 	}
 	if m.dirty.Dirty() {
 		m.prevScreen = m.screen
 		m.confirmYes = func(mm *Model) (tea.Model, tea.Cmd) {
+			if pushHistory {
+				mm.pushEntityFrame()
+			}
 			mm.dirty.Reset()
 			mm.status = "loading..."
 			return mm, lookupKeyCmd(mm.client, key)
 		}
 		m.screen = screenConfirmQuit
 		return m, nil
+	}
+	if pushHistory {
+		m.pushEntityFrame()
 	}
 	m.status = "loading..."
 	return m, lookupKeyCmd(m.client, key)
@@ -316,10 +367,13 @@ func (m *Model) openBookmark(idx int) (tea.Model, tea.Cmd) {
 	if idx < 0 || idx >= len(m.bookmarks) {
 		return m, nil
 	}
+	// Opening a bookmark always starts a fresh navigation root, unrelated to
+	// wherever "ctrl+]" chasing had gotten to before ctrl+l was pressed.
+	m.entityStack = nil
 	key := m.bookmarks[idx].Key
 	e, ok := m.bookmarkEntities[key.String()]
 	if !ok || e == nil {
-		return m.goToKey(key)
+		return m.goToKey(key, false)
 	}
 	if m.dirty.Dirty() {
 		m.prevScreen = m.screen
@@ -333,7 +387,9 @@ func (m *Model) openBookmark(idx int) (tea.Model, tea.Cmd) {
 }
 
 // detailBack implements "h"/"esc" in detail mode: stepping out one nesting
-// level, or (at the entity root) leaving the detail view for browse mode.
+// level; at an entity's root, popping back to whichever entity a "ctrl+]"
+// follow was chased from (see entityFrame), or — with no such entity —
+// leaving the detail view for browse mode.
 func (m *Model) detailBack() (tea.Model, tea.Cmd) {
 	if m.detailPath.Depth() > 0 {
 		m.detailPath.Pop()
@@ -341,10 +397,24 @@ func (m *Model) detailBack() (tea.Model, tea.Cmd) {
 		m.detailFilter = ""
 		return m, nil
 	}
+	if len(m.entityStack) > 0 {
+		if m.dirty.Dirty() {
+			m.prevScreen = screenDetail
+			m.confirmYes = func(mm *Model) (tea.Model, tea.Cmd) {
+				mm.popEntityFrame()
+				return mm, nil
+			}
+			m.screen = screenConfirmQuit
+			return m, nil
+		}
+		m.popEntityFrame()
+		return m, nil
+	}
 	return m.exitDetailToBrowse()
 }
 
 func (m *Model) exitDetailToBrowse() (tea.Model, tea.Cmd) {
+	m.entityStack = nil
 	if !m.dirty.Dirty() {
 		m.currentEntity = nil
 		m.screen = screenBrowse
@@ -586,6 +656,7 @@ func (m *Model) finishNewEntity() (tea.Model, tea.Cmd) {
 		Properties: map[string]model.Value{},
 	}
 	m.currentEntity = e
+	m.entityStack = nil
 	m.detailPath.Reset()
 	m.detailSelected = 0
 	m.detailFilter = ""

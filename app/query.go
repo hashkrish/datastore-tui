@@ -167,7 +167,16 @@ func (m *Model) updateQueryFilter(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.screen = screenBrowse
 			return m, nil
 		}
-		fe, ok := edit.NewFieldEditor(edit.ZeroValue(m.queryValueKind), m.width)
+		zero := edit.ZeroValue(m.queryValueKind)
+		if m.queryValueKind == model.KindKey && zero.KeyValue != nil {
+			// A Key filter value typed by hand (as opposed to ctrl+p pasting
+			// a bookmark, which already carries its own namespace) otherwise
+			// defaults to the empty/default namespace regardless of which
+			// namespace this query actually runs against, so a hand-typed
+			// Key filter would never match an entity outside it.
+			zero.KeyValue.NamespaceID = resolveNamespaceID(m.namespace)
+		}
+		fe, ok := edit.NewFieldEditor(zero, m.width)
 		if !ok {
 			m.err = errQueryUnsupportedValueType
 			m.screen = screenBrowse

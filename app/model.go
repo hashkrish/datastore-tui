@@ -63,6 +63,13 @@ type Model struct {
 	currentEntity *model.Entity // non-nil while a detail view is open
 	dirty         edit.Tracker
 
+	// entityStack holds the detail-view state to return to when "h"/"esc"
+	// backs out past the root of an entity reached via "ctrl+]" (following a
+	// Key-typed property) — see followKeyProperty/goToKey and detailBack.
+	// Empty for a detail view opened directly from browse, a bookmark, or a
+	// new entity, so backing out of those still lands in browse as before.
+	entityStack []entityFrame
+
 	screen         screen
 	prevScreen     screen // screen to return to after a confirm/help overlay
 	detailSelected int
@@ -563,6 +570,7 @@ Detail mode (viewing/editing an entity):
   dd             delete array item (when viewing an array)
   r              reload from the database (confirms first if you have unsaved edits)
   ctrl+]         open the entity a selected Key property points at
+                 (h/esc backs out to the entity you followed it from)
   yy             copy the selected property's value to the clipboard
   ctrl+b         bookmark/unbookmark the current entity
   ctrl+l         open bookmarks (jump to a bookmarked entity)

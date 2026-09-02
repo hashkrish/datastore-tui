@@ -190,6 +190,7 @@ func (m *Model) drillIn() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.currentEntity = e
+		m.entityStack = nil
 		m.detailPath.Reset()
 		m.detailSelected = 0
 		m.detailFilter = ""
