@@ -87,6 +87,9 @@ func (m *Model) updateBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, km.Add):
 		if m.nav.Focus == nav.ColumnEntity {
+			if m.blockReadOnly() {
+				return m, nil
+			}
 			return m.startNewEntity()
 		}
 		return m, nil
@@ -96,6 +99,9 @@ func (m *Model) updateBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.chordD.Complete('d') {
+			if m.blockReadOnly() {
+				return m, nil
+			}
 			if m.nav.SelectedEntity() != nil {
 				m.prevScreen = screenBrowse
 				m.confirmYes = func(mm *Model) (tea.Model, tea.Cmd) {

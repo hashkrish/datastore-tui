@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -17,7 +18,7 @@ func main() {
 		return
 	}
 
-	cfg, err := config.Load(os.Args[1:])
+	cfg, err := config.Load(context.Background(), os.Args[1:])
 	if errors.Is(err, flag.ErrHelp) {
 		return // usage was already printed by the flag package
 	}
@@ -26,7 +27,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	m := app.New(cfg.Client())
+	m := app.New(cfg.Client(), cfg.ReadOnly)
 	if _, err := tea.NewProgram(m, tea.WithAltScreen()).Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "datastore-tui:", err)
 		os.Exit(1)

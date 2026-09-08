@@ -10,9 +10,9 @@ for recursively navigating and editing its (possibly nested) properties —
 arrays, embedded entities, geopoints, key references, and so on each get
 their own typed edit form.
 
-Currently targets the local [Datastore emulator](https://cloud.google.com/datastore/docs/tools/datastore-emulator)
-(no authentication). Support for real GCP projects via Application Default
-Credentials is planned but not yet implemented.
+Works against the local [Datastore emulator](https://cloud.google.com/datastore/docs/tools/datastore-emulator)
+(no authentication) or a real GCP project, authenticated via Application
+Default Credentials.
 
 ## Installation
 
@@ -50,12 +50,57 @@ datastore-tui -project my-test-project
 `-project` can be any string the emulator accepts unauthenticated; it does
 not need to be a real GCP project.
 
+## Running against a real GCP project
+
+If `-endpoint` isn't passed and `DATASTORE_EMULATOR_HOST` isn't set,
+`datastore-tui` targets the real Cloud Datastore API
+(`https://datastore.googleapis.com`) and authenticates using [Application
+Default Credentials](https://cloud.google.com/docs/authentication/application-default-credentials)
+(ADC) — the same resolution `gcloud` and the official client libraries use.
+Set up credentials with one of:
+
+```sh
+gcloud auth application-default login
+```
+
+or, for a service account key:
+
+```sh
+export GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json
+```
+
+The identity needs the `roles/datastore.user` (or `roles/datastore.owner`)
+IAM role on the target project. Then run:
+
+```sh
+datastore-tui -project my-real-project
+```
+
+The project ID can be omitted if ADC itself carries one (e.g. a service
+account key's `project_id`, or `gcloud`'s configured project) — otherwise
+pass `-project` or set `GOOGLE_CLOUD_PROJECT`/`DATASTORE_PROJECT_ID`.
+
+The first time you point `datastore-tui` at a real (especially production)
+project, add `-read-only` to browse safely before trusting yourself with
+edits:
+
+```sh
+datastore-tui -project my-real-project -read-only
+```
+
 ## Configuration
 
-| Flag         | Env var                                       | Default                 |
-|--------------|------------------------------------------------|--------------------------|
-| `-project`   | `GOOGLE_CLOUD_PROJECT`, `DATASTORE_PROJECT_ID` | `test-project`          |
-| `-endpoint`  | `DATASTORE_EMULATOR_HOST` (as `http://<host>`) | `http://localhost:8081` |
+| Flag         | Env var                                       | Default                                            |
+|--------------|------------------------------------------------|------------------------------------------------------|
+| `-project`   | `GOOGLE_CLOUD_PROJECT`, `DATASTORE_PROJECT_ID` | `test-project` (emulator) / from ADC (real GCP)     |
+| `-endpoint`  | `DATASTORE_EMULATOR_HOST` (as `http://<host>`) | `http://localhost:8081` (emulator) / `https://datastore.googleapis.com` (real GCP) |
+| `-read-only` | —                                              | `false`                                             |
+
+Setting `-endpoint` or `DATASTORE_EMULATOR_HOST` selects local emulator mode
+(no authentication); leaving both unset selects real-GCP mode (ADC-authenticated).
+`-read-only` disables every mutating action (new/delete entity,
+retype/add/delete property, save) — a `[read-only]` marker shows in the
+status line, and blocked actions report why nothing happened.
 
 `datastore-tui --version` prints build info; `datastore-tui -h` prints flag usage.
 

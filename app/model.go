@@ -56,6 +56,7 @@ const (
 type Model struct {
 	client    *client.Client
 	namespace string // resolved (non-label) namespace backing the current kind/entity lists
+	readOnly  bool   // disables every mutating action; see blockReadOnly
 
 	nav        *nav.State
 	detailPath nav.DetailPath
@@ -129,16 +130,34 @@ type Model struct {
 	err           error
 }
 
-// New builds a fresh Model against c.
-func New(c *client.Client) *Model {
+// New builds a fresh Model against c. When readOnly is true, every mutating
+// action (new/delete entity, retype/add/delete property, save) is blocked;
+// see blockReadOnly.
+func New(c *client.Client, readOnly bool) *Model {
 	fi := textinput.New()
 	fi.Prompt = "/"
 	return &Model{
 		client:      c,
+		readOnly:    readOnly,
 		nav:         nav.NewState(),
 		filterInput: fi,
 		bookmarks:   loadBookmarks(),
 	}
+}
+
+// blockReadOnly reports whether m is in read-only mode, setting a status
+// message if so. Callers that trigger a mutating action must check this
+// first, before opening any form or confirmation dialog:
+//
+//	if m.blockReadOnly() {
+//		return m, nil
+//	}
+func (m *Model) blockReadOnly() bool {
+	if !m.readOnly {
+		return false
+	}
+	m.status = "read-only mode: mutations disabled (-read-only)"
+	return true
 }
 
 func (m *Model) Init() tea.Cmd {
@@ -485,6 +504,9 @@ func (m *Model) viewStatus() string {
 		segs = append(segs, m.status+dirtyMark)
 	} else if dirtyMark != "" {
 		segs = append(segs, strings.TrimSpace(dirtyMark))
+	}
+	if m.readOnly {
+		segs = append(segs, lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render("[read-only]"))
 	}
 	segs = append(segs, "?")
 

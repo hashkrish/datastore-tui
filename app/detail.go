@@ -67,6 +67,9 @@ func (m *Model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, km.Retype):
 		m.chordD.Reset()
 		m.chordY.Reset()
+		if m.blockReadOnly() {
+			return m, nil
+		}
 		return m.startRetype()
 
 	case key.Matches(msg, km.Filter):
@@ -80,10 +83,16 @@ func (m *Model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.currentEntity == nil {
 			return m, nil
 		}
+		if m.blockReadOnly() {
+			return m, nil
+		}
 		m.status = "saving..."
 		return m, saveEntityCmd(m.client, m.currentEntity)
 
 	case key.Matches(msg, km.AddItem):
+		if m.blockReadOnly() {
+			return m, nil
+		}
 		return m.startAddItem()
 
 	case key.Matches(msg, km.Refresh):
@@ -108,6 +117,9 @@ func (m *Model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, km.DeleteItem):
 		if m.chordD.Complete('d') {
+			if m.blockReadOnly() {
+				return m, nil
+			}
 			return m.confirmDeleteItem()
 		}
 		m.chordD.Arm('d')
