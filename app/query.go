@@ -127,7 +127,7 @@ func (m *Model) openQueryFilterForm(properties []string) (tea.Model, tea.Cmd) {
 			propOpts[i] = huh.NewOption(p, p)
 		}
 		m.queryProperty = properties[0]
-		propertyField = huh.NewSelect[string]().Title("Property").Options(propOpts...).Value(&m.queryProperty)
+		propertyField = huh.NewSelect[string]().Title("Property").Options(propOpts...).Value(&m.queryProperty).Filtering(true)
 	} else {
 		propertyField = huh.NewInput().Title("Property (none found for this kind)").Value(&m.queryProperty)
 	}

@@ -41,7 +41,7 @@ func (m *Model) openOrderForm(properties []string) (tea.Model, tea.Cmd) {
 			propOpts[i] = huh.NewOption(p, p)
 		}
 		m.orderProperty = properties[0]
-		propertyField = huh.NewSelect[string]().Title("Property").Options(propOpts...).Value(&m.orderProperty)
+		propertyField = huh.NewSelect[string]().Title("Property").Options(propOpts...).Value(&m.orderProperty).Filtering(true)
 	} else {
 		propertyField = huh.NewInput().Title("Property (none found for this kind)").Value(&m.orderProperty)
 	}

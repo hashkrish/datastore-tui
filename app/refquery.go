@@ -106,7 +106,7 @@ func (m *Model) openRefKindForm(kinds []string) (tea.Model, tea.Cmd) {
 		opts[i] = huh.NewOption(k, k)
 	}
 	m.refKindForm = huh.NewForm(huh.NewGroup(
-		huh.NewSelect[string]().Title("Target kind").Options(opts...).Value(&m.refTargetKind),
+		huh.NewSelect[string]().Title("Target kind").Options(opts...).Value(&m.refTargetKind).Filtering(true),
 	))
 	if m.width > 0 {
 		m.refKindForm = m.refKindForm.WithWidth(m.width)
@@ -150,7 +150,7 @@ func (m *Model) openRefPropertyForm(properties []string) (tea.Model, tea.Cmd) {
 			propOpts[i] = huh.NewOption(p, p)
 		}
 		m.refProperty = properties[0]
-		propertyField = huh.NewSelect[string]().Title("Property").Options(propOpts...).Value(&m.refProperty)
+		propertyField = huh.NewSelect[string]().Title("Property").Options(propOpts...).Value(&m.refProperty).Filtering(true)
 	} else {
 		propertyField = huh.NewInput().Title("Property (none found for this kind)").Value(&m.refProperty)
 	}
