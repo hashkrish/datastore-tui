@@ -169,6 +169,13 @@ func (s *State) SelectedEntity() *model.Entity {
 	return nil
 }
 
+// SelectedEntities returns the entity column's currently loaded entities in
+// display order — the same slice the Entity column and its preview pane
+// already draw from, already reflecting any active query filter/order (see
+// SetEntitiesPage) — for the table view to tabulate without issuing a new
+// fetch.
+func (s *State) SelectedEntities() []*model.Entity { return s.loadedEntities }
+
 // column returns the columnList for the focused column, so movement/filter
 // operations can act generically on "whichever column is focused."
 func (s *State) column(col Column) *columnList {

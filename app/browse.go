@@ -97,6 +97,9 @@ func (m *Model) updateBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, km.ClearFilters):
 		return m.clearFilters()
 
+	case key.Matches(msg, km.ToggleTable):
+		return m.openTableView()
+
 	case key.Matches(msg, km.Add):
 		if m.nav.Focus == nav.ColumnEntity {
 			if m.blockReadOnly() {
@@ -214,6 +217,7 @@ func (m *Model) drillIn() (tea.Model, tea.Cmd) {
 		m.detailFilter = ""
 		m.dirty.Reset()
 		m.status = ""
+		m.detailOrigin = screenBrowse
 		m.screen = screenDetail
 		return m, nil
 	}

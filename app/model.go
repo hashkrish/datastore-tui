@@ -24,6 +24,9 @@ type screen int
 const (
 	screenBrowse screen = iota
 	screenDetail
+	screenTable
+	screenTableColumnFilter
+	screenTableSearch
 	screenFilterInput
 	screenDetailFilterInput
 	screenEditLeaf
@@ -66,6 +69,17 @@ type Model struct {
 
 	currentEntity *model.Entity // non-nil while a detail view is open
 	dirty         edit.Tracker
+
+	// detailOrigin is the screen ("h"/"esc"/"q" out of the detail view's
+	// root) should return to: screenBrowse (the zero value, and every
+	// existing way of opening detail) or screenTable, when detail was
+	// opened via "enter" on a table-view row (see openEntityDetailFromTable
+	// in app/table.go). Deliberately separate from prevScreen, which is
+	// reused as scratch state for confirm/help overlays and gets
+	// overwritten en route through those flows.
+	detailOrigin screen
+
+	tableState *nav.TableState // non-nil while screenTable is active
 
 	// entityStack holds the detail-view state to return to when "h"/"esc"
 	// backs out past the root of an entity reached via "ctrl+]" (following a
@@ -372,6 +386,12 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.updateDetailFilterInput(msg)
 	case screenDetail:
 		return m.updateDetail(msg)
+	case screenTable:
+		return m.updateTable(msg)
+	case screenTableColumnFilter:
+		return m.updateTableColumnFilter(msg)
+	case screenTableSearch:
+		return m.updateTableSearch(msg)
 	case screenEditLeaf:
 		return m.updateEditLeaf(msg)
 	case screenNewItemType:
@@ -423,6 +443,10 @@ func (m *Model) viewBody() string {
 		return m.viewDetailScreen(contentHeight-1) + "\n" + m.filterInput.View()
 	case screenDetail, screenEditLeaf, screenNewItemType, screenNewItemValue, screenConfirmDeleteItem, screenConfirmRefresh:
 		return m.viewDetailScreen(contentHeight)
+	case screenTable:
+		return panes.RenderTable(m.nav.SelectedEntities(), m.tableState, m.width, contentHeight)
+	case screenTableColumnFilter, screenTableSearch:
+		return panes.RenderTable(m.nav.SelectedEntities(), m.tableState, m.width, contentHeight-1) + "\n" + m.filterInput.View()
 	case screenNewEntityKey:
 		return m.newEntityKeyForm.View()
 	case screenBookmarks:
@@ -645,9 +669,23 @@ Browse mode:
   F              same as ctrl+f, but AND-combines onto the active query
                  instead of clearing it (only when staying on the same kind)
   yy             copy the selected entity's key to the clipboard
+  T              toggle table (spreadsheet) view of the current kind's entities
   ctrl+l         open bookmarks (jump to a bookmarked entity)
   q, ctrl+c      quit
   (right pane previews the highlighted entity's properties)
+
+Table view (T):
+  j/k, up/down   move selected row
+  h/l, left/right move selected column
+  gg / G         jump to top / bottom row
+  ctrl+u/ctrl+d  half page up/down
+  enter          open the selected row's entity in detail view
+  yy             copy the selected cell's value to the clipboard
+  *              filter which columns (properties) are shown, by name
+  /              search every visible cell's value, jump to the first match
+  n / N          jump to the next / previous search match
+  T, q, esc      back to browse
+  ctrl+c         quit
 
 Bookmark picker (ctrl+l):
   j/k, up/down, ctrl+n/ctrl+p move

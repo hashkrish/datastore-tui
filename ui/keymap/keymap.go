@@ -39,6 +39,7 @@ type BrowseKeyMap struct {
 	FindReferences           key.Binding // ctrl+f: query another kind by this entity's key (clears any active query)
 	FindReferencesAdd        key.Binding // F: same, but AND-combines onto the active query instead of clearing it
 	Yank                     key.Binding // first "y" of "yy": copy the selected entity's key
+	ToggleTable              key.Binding // T: toggle table (spreadsheet) view of the current kind's entities
 	Quit                     key.Binding
 	Help                     key.Binding
 	PendingG                 key.Binding // first "g" of "gg"
@@ -68,6 +69,7 @@ func DefaultBrowseKeyMap() BrowseKeyMap {
 		FindReferences:    key.NewBinding(key.WithKeys("ctrl+f"), key.WithHelp("ctrl+f", "find references")),
 		FindReferencesAdd: key.NewBinding(key.WithKeys("F"), key.WithHelp("F", "find references (add)")),
 		Yank:              key.NewBinding(key.WithKeys("y"), key.WithHelp("yy", "copy key")),
+		ToggleTable:       key.NewBinding(key.WithKeys("T"), key.WithHelp("T", "table view")),
 		Quit:              key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
 		Help:              key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 	}
@@ -120,6 +122,51 @@ func DefaultDetailKeyMap() DetailKeyMap {
 		Yank:              key.NewBinding(key.WithKeys("y"), key.WithHelp("yy", "copy value")),
 		Quit:              key.NewBinding(key.WithKeys("q", "esc"), key.WithHelp("q/esc", "back to browse")),
 		Help:              key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
+	}
+}
+
+// TableKeyMap covers the spreadsheet-like grid mode ("T" from browse):
+// entities as rows, properties as columns. h/l scroll columns rather than
+// back/drill-in, and there's no Query/Order of its own (v1 scope), which is
+// why this is its own struct instead of reusing BrowseKeyMap.
+type TableKeyMap struct {
+	Up, Down                 key.Binding
+	Left, Right              key.Binding
+	Top, Bottom              key.Binding
+	HalfPageUp, HalfPageDown key.Binding
+	Open                     key.Binding // enter: open the selected row's entity in detail view
+	Yank                     key.Binding // first "y" of "yy": copy the selected cell's value
+	FilterColumns            key.Binding // *: filter which columns (properties) are shown, by name
+	Search                   key.Binding // /: search every visible cell's value, jump to the first match
+	NextMatch                key.Binding // n: jump to the next search match
+	PrevMatch                key.Binding // N: jump to the previous search match
+	Toggle                   key.Binding // T: back to browse
+	Back                     key.Binding // q/esc: back to browse (table is a child screen of browse, like detail mode — "q" here must not quit the app)
+	Quit                     key.Binding // ctrl+c: actually quit the app
+	Help                     key.Binding
+}
+
+// DefaultTableKeyMap returns the standard vim bindings for table mode.
+func DefaultTableKeyMap() TableKeyMap {
+	return TableKeyMap{
+		Up:            key.NewBinding(key.WithKeys("k", "up"), key.WithHelp("k/↑", "up")),
+		Down:          key.NewBinding(key.WithKeys("j", "down"), key.WithHelp("j/↓", "down")),
+		Left:          key.NewBinding(key.WithKeys("h", "left"), key.WithHelp("h/←", "scroll left")),
+		Right:         key.NewBinding(key.WithKeys("l", "right"), key.WithHelp("l/→", "scroll right")),
+		Top:           key.NewBinding(key.WithKeys("g"), key.WithHelp("gg", "top")),
+		Bottom:        key.NewBinding(key.WithKeys("G"), key.WithHelp("G", "bottom")),
+		HalfPageUp:    key.NewBinding(key.WithKeys("ctrl+u"), key.WithHelp("ctrl+u", "half page up")),
+		HalfPageDown:  key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("ctrl+d", "half page down")),
+		Open:          key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open entity")),
+		Yank:          key.NewBinding(key.WithKeys("y"), key.WithHelp("yy", "copy cell value")),
+		FilterColumns: key.NewBinding(key.WithKeys("*"), key.WithHelp("*", "filter columns")),
+		Search:        key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search cells")),
+		NextMatch:     key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "next match")),
+		PrevMatch:     key.NewBinding(key.WithKeys("N"), key.WithHelp("N", "previous match")),
+		Toggle:        key.NewBinding(key.WithKeys("T"), key.WithHelp("T", "back to browse")),
+		Back:          key.NewBinding(key.WithKeys("q", "esc"), key.WithHelp("q/esc", "back to browse")),
+		Quit:          key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit")),
+		Help:          key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 	}
 }
 

@@ -313,6 +313,7 @@ func (m *Model) openEntity(e *model.Entity) (tea.Model, tea.Cmd) {
 	m.detailSelected = 0
 	m.detailFilter = ""
 	m.dirty.Reset()
+	m.detailOrigin = screenBrowse
 	m.screen = screenDetail
 	return m, nil
 }
@@ -514,18 +515,23 @@ func (m *Model) detailBack() (tea.Model, tea.Cmd) {
 	return m.exitDetailToBrowse()
 }
 
+// exitDetailToBrowse implements "q"/"esc" out of the detail view's root (and
+// "h"/"esc" via detailBack, once entityStack is empty): returns to whichever
+// screen opened this detail view — browse, or table view if it was opened
+// via "enter" on a table-view row (see detailOrigin, openEntityDetailFromTable).
 func (m *Model) exitDetailToBrowse() (tea.Model, tea.Cmd) {
 	m.entityStack = nil
 	if !m.dirty.Dirty() {
 		m.currentEntity = nil
-		m.screen = screenBrowse
+		m.screen = m.detailOrigin
 		return m, nil
 	}
 	m.prevScreen = screenDetail
+	origin := m.detailOrigin
 	m.confirmYes = func(mm *Model) (tea.Model, tea.Cmd) {
 		mm.currentEntity = nil
 		mm.dirty.Reset()
-		mm.screen = screenBrowse
+		mm.screen = origin
 		return mm, nil
 	}
 	m.screen = screenConfirmQuit
@@ -762,6 +768,7 @@ func (m *Model) finishNewEntity() (tea.Model, tea.Cmd) {
 	m.detailSelected = 0
 	m.detailFilter = ""
 	m.dirty.MarkDirty() // a brand new entity always needs an initial save
+	m.detailOrigin = screenBrowse
 	m.screen = screenDetail
 	return m, nil
 }
