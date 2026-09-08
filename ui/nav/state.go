@@ -141,6 +141,20 @@ func (s *State) SelectedNamespace() (string, bool) { return s.namespaces.selecte
 // SelectedKind returns the currently selected kind name, or "" if none.
 func (s *State) SelectedKind() (string, bool) { return s.kinds.selectedItem() }
 
+// SelectKind selects kind within the already-loaded kind column (e.g. after
+// SetKinds), for jumping directly to a kind that isn't the one under the
+// cursor — used by the cross-kind reference query ("F"). Reports whether
+// kind was found.
+func (s *State) SelectKind(kind string) bool {
+	for i, k := range s.kinds.items {
+		if k == kind {
+			s.kinds.selected = i
+			return true
+		}
+	}
+	return false
+}
+
 // SelectedEntity returns the currently selected entity, or nil if none.
 func (s *State) SelectedEntity() *model.Entity {
 	label, ok := s.entities.selectedItem()

@@ -55,6 +55,32 @@ type orderPropertiesLoadedMsg struct {
 	err        error
 }
 
+// refKindsLoadedMsg is loadRefKindsCmd's result ("F" cross-kind reference
+// query): the same kind listing kindsLoadedMsg uses, but tagged separately
+// so Update opens the reference-query kind picker instead of mutating the
+// real Kind column — kindsLoadedMsg's handler calls nav.State.SetKinds
+// immediately, which this flow must not do until the user actually commits
+// to a target kind (they may cancel partway through).
+type refKindsLoadedMsg struct {
+	namespace string
+	kinds     []string
+	err       error
+}
+
+// refPropertiesLoadedMsg is loadRefPropertiesCmd's result: the same
+// __property__ lookup propertiesLoadedMsg uses for "Q", but tagged
+// separately so Update opens the reference-query property picker (fixed to
+// the already-known filter value) instead of the "Q" flow's value editor,
+// and so it isn't dropped as stale by propertiesLoadedMsg's "kind ==
+// m.nav.SelectedKind()" guard — the target kind here is deliberately not
+// the currently selected one.
+type refPropertiesLoadedMsg struct {
+	namespace  string
+	kind       string
+	properties []string
+	err        error
+}
+
 type entitySavedMsg struct {
 	err error
 }

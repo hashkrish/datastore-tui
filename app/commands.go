@@ -47,6 +47,27 @@ func loadOrderPropertiesCmd(c *client.Client, namespace, kind string) tea.Cmd {
 	}
 }
 
+// loadRefKindsCmd is loadKindsCmd's counterpart for "F" (cross-kind
+// reference query): same query.ListKinds call, tagged with refKindsLoadedMsg
+// so Update doesn't mutate the real Kind column with it — see
+// refKindsLoadedMsg.
+func loadRefKindsCmd(c *client.Client, namespace string) tea.Cmd {
+	return func() tea.Msg {
+		kinds, err := query.ListKinds(context.Background(), c, namespace)
+		return refKindsLoadedMsg{namespace: namespace, kinds: kinds, err: err}
+	}
+}
+
+// loadRefPropertiesCmd is loadPropertiesCmd's counterpart for "F", querying
+// the target kind's properties rather than the currently selected one — see
+// refPropertiesLoadedMsg.
+func loadRefPropertiesCmd(c *client.Client, namespace, kind string) tea.Cmd {
+	return func() tea.Msg {
+		properties, err := query.ListProperties(context.Background(), c, namespace, kind)
+		return refPropertiesLoadedMsg{namespace: namespace, kind: kind, properties: properties, err: err}
+	}
+}
+
 func loadEntitiesCmd(c *client.Client, namespace, kind, cursor string, appendPage bool, order *client.Order) tea.Cmd {
 	return func() tea.Msg {
 		page, err := query.ListEntitiesPage(context.Background(), c, namespace, kind, cursor, entityPageSize, order)

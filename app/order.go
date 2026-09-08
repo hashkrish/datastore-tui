@@ -55,6 +55,9 @@ func (m *Model) openOrderForm(properties []string) (tea.Model, tea.Cmd) {
 	if m.width > 0 {
 		m.orderForm = m.orderForm.WithWidth(m.width)
 	}
+	if h := formHeight(m.height); h > 0 {
+		m.orderForm = m.orderForm.WithHeight(h)
+	}
 	m.screen = screenOrder
 	return m, m.orderForm.Init()
 }

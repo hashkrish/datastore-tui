@@ -32,9 +32,12 @@ type BrowseKeyMap struct {
 	Refresh                  key.Binding
 	Open                     key.Binding
 	ListBookmarks            key.Binding // ctrl+l: open the bookmark picker
-	Query                    key.Binding // Q: filter the current kind's entities by a property (AND-combines if pressed again)
+	ToggleBookmark           key.Binding // ctrl+b: bookmark/unbookmark the highlighted entity
+	Query                    key.Binding // f: filter the current kind's entities by a property (AND-combines if pressed again)
 	ClearFilters             key.Binding // C: clear all active AND filters
 	Order                    key.Binding // O: order the current kind's entities by a property
+	FindReferences           key.Binding // ctrl+f: query another kind by this entity's key (clears any active query)
+	FindReferencesAdd        key.Binding // F: same, but AND-combines onto the active query instead of clearing it
 	Yank                     key.Binding // first "y" of "yy": copy the selected entity's key
 	Quit                     key.Binding
 	Help                     key.Binding
@@ -44,26 +47,29 @@ type BrowseKeyMap struct {
 // DefaultBrowseKeyMap returns the standard vim bindings for browse mode.
 func DefaultBrowseKeyMap() BrowseKeyMap {
 	return BrowseKeyMap{
-		Up:            key.NewBinding(key.WithKeys("k", "up"), key.WithHelp("k/↑", "up")),
-		Down:          key.NewBinding(key.WithKeys("j", "down"), key.WithHelp("j/↓", "down")),
-		Left:          key.NewBinding(key.WithKeys("h", "left"), key.WithHelp("h/←", "back")),
-		Right:         key.NewBinding(key.WithKeys("l", "right"), key.WithHelp("l/→", "drill in")),
-		Top:           key.NewBinding(key.WithKeys("g"), key.WithHelp("gg", "top")),
-		Bottom:        key.NewBinding(key.WithKeys("G"), key.WithHelp("G", "bottom")),
-		HalfPageUp:    key.NewBinding(key.WithKeys("ctrl+u"), key.WithHelp("ctrl+u", "half page up")),
-		HalfPageDown:  key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("ctrl+d", "half page down")),
-		Filter:        key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
-		DeleteMark:    key.NewBinding(key.WithKeys("d"), key.WithHelp("dd", "delete")),
-		Add:           key.NewBinding(key.WithKeys("o"), key.WithHelp("o", "new entity")),
-		Refresh:       key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "refresh")),
-		Open:          key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open")),
-		ListBookmarks: key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "bookmarks")),
-		Query:         key.NewBinding(key.WithKeys("Q"), key.WithHelp("Q", "query")),
-		ClearFilters:  key.NewBinding(key.WithKeys("C"), key.WithHelp("C", "clear filters")),
-		Order:         key.NewBinding(key.WithKeys("O"), key.WithHelp("O", "order")),
-		Yank:          key.NewBinding(key.WithKeys("y"), key.WithHelp("yy", "copy key")),
-		Quit:          key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
-		Help:          key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
+		Up:                key.NewBinding(key.WithKeys("k", "up"), key.WithHelp("k/↑", "up")),
+		Down:              key.NewBinding(key.WithKeys("j", "down"), key.WithHelp("j/↓", "down")),
+		Left:              key.NewBinding(key.WithKeys("h", "left"), key.WithHelp("h/←", "back")),
+		Right:             key.NewBinding(key.WithKeys("l", "right"), key.WithHelp("l/→", "drill in")),
+		Top:               key.NewBinding(key.WithKeys("g"), key.WithHelp("gg", "top")),
+		Bottom:            key.NewBinding(key.WithKeys("G"), key.WithHelp("G", "bottom")),
+		HalfPageUp:        key.NewBinding(key.WithKeys("ctrl+u"), key.WithHelp("ctrl+u", "half page up")),
+		HalfPageDown:      key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("ctrl+d", "half page down")),
+		Filter:            key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
+		DeleteMark:        key.NewBinding(key.WithKeys("d"), key.WithHelp("dd", "delete")),
+		Add:               key.NewBinding(key.WithKeys("o"), key.WithHelp("o", "new entity")),
+		Refresh:           key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "refresh")),
+		Open:              key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open")),
+		ListBookmarks:     key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "bookmarks")),
+		ToggleBookmark:    key.NewBinding(key.WithKeys("ctrl+b"), key.WithHelp("ctrl+b", "bookmark")),
+		Query:             key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "query")),
+		ClearFilters:      key.NewBinding(key.WithKeys("C"), key.WithHelp("C", "clear filters")),
+		Order:             key.NewBinding(key.WithKeys("O"), key.WithHelp("O", "order")),
+		FindReferences:    key.NewBinding(key.WithKeys("ctrl+f"), key.WithHelp("ctrl+f", "find references")),
+		FindReferencesAdd: key.NewBinding(key.WithKeys("F"), key.WithHelp("F", "find references (add)")),
+		Yank:              key.NewBinding(key.WithKeys("y"), key.WithHelp("yy", "copy key")),
+		Quit:              key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
+		Help:              key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 	}
 }
 
@@ -83,6 +89,8 @@ type DetailKeyMap struct {
 	GoToKey                  key.Binding // ctrl+]: open the entity a Key-typed property points at
 	ToggleBookmark           key.Binding // ctrl+b: bookmark/unbookmark the current entity
 	ListBookmarks            key.Binding // ctrl+l: open the bookmark picker
+	FindReferences           key.Binding // ctrl+f: query another kind by this property's value (clears any active query)
+	FindReferencesAdd        key.Binding // F: same, but AND-combines onto the active query instead of clearing it
 	Yank                     key.Binding // first "y" of "yy": copy the selected property's value
 	Quit                     key.Binding
 	Help                     key.Binding
@@ -91,25 +99,27 @@ type DetailKeyMap struct {
 // DefaultDetailKeyMap returns the standard vim bindings for detail mode.
 func DefaultDetailKeyMap() DetailKeyMap {
 	return DetailKeyMap{
-		Up:             key.NewBinding(key.WithKeys("k", "up"), key.WithHelp("k/↑", "up")),
-		Down:           key.NewBinding(key.WithKeys("j", "down"), key.WithHelp("j/↓", "down")),
-		HalfPageUp:     key.NewBinding(key.WithKeys("ctrl+u"), key.WithHelp("ctrl+u", "half page up")),
-		HalfPageDown:   key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("ctrl+d", "half page down")),
-		Expand:         key.NewBinding(key.WithKeys("l", "right", "enter"), key.WithHelp("l/enter", "expand/edit")),
-		Back:           key.NewBinding(key.WithKeys("h", "left", "esc"), key.WithHelp("h/esc", "back")),
-		Edit:           key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "edit")),
-		Retype:         key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "change type")),
-		Filter:         key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
-		AddItem:        key.NewBinding(key.WithKeys("o"), key.WithHelp("o", "add item")),
-		DeleteItem:     key.NewBinding(key.WithKeys("d"), key.WithHelp("dd", "delete item")),
-		Save:           key.NewBinding(key.WithKeys("w"), key.WithHelp("w", "save")),
-		Refresh:        key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "refresh")),
-		GoToKey:        key.NewBinding(key.WithKeys("ctrl+]"), key.WithHelp("ctrl+]", "go to key")),
-		ToggleBookmark: key.NewBinding(key.WithKeys("ctrl+b"), key.WithHelp("ctrl+b", "bookmark")),
-		ListBookmarks:  key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "bookmarks")),
-		Yank:           key.NewBinding(key.WithKeys("y"), key.WithHelp("yy", "copy value")),
-		Quit:           key.NewBinding(key.WithKeys("q", "esc"), key.WithHelp("q/esc", "back to browse")),
-		Help:           key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
+		Up:                key.NewBinding(key.WithKeys("k", "up"), key.WithHelp("k/↑", "up")),
+		Down:              key.NewBinding(key.WithKeys("j", "down"), key.WithHelp("j/↓", "down")),
+		HalfPageUp:        key.NewBinding(key.WithKeys("ctrl+u"), key.WithHelp("ctrl+u", "half page up")),
+		HalfPageDown:      key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("ctrl+d", "half page down")),
+		Expand:            key.NewBinding(key.WithKeys("l", "right", "enter"), key.WithHelp("l/enter", "expand/edit")),
+		Back:              key.NewBinding(key.WithKeys("h", "left", "esc"), key.WithHelp("h/esc", "back")),
+		Edit:              key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "edit")),
+		Retype:            key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "change type")),
+		Filter:            key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
+		AddItem:           key.NewBinding(key.WithKeys("o"), key.WithHelp("o", "add item")),
+		DeleteItem:        key.NewBinding(key.WithKeys("d"), key.WithHelp("dd", "delete item")),
+		Save:              key.NewBinding(key.WithKeys("w"), key.WithHelp("w", "save")),
+		Refresh:           key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "refresh")),
+		GoToKey:           key.NewBinding(key.WithKeys("ctrl+]"), key.WithHelp("ctrl+]", "go to key")),
+		ToggleBookmark:    key.NewBinding(key.WithKeys("ctrl+b"), key.WithHelp("ctrl+b", "bookmark")),
+		ListBookmarks:     key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "bookmarks")),
+		FindReferences:    key.NewBinding(key.WithKeys("ctrl+f"), key.WithHelp("ctrl+f", "find references")),
+		FindReferencesAdd: key.NewBinding(key.WithKeys("F"), key.WithHelp("F", "find references (add)")),
+		Yank:              key.NewBinding(key.WithKeys("y"), key.WithHelp("yy", "copy value")),
+		Quit:              key.NewBinding(key.WithKeys("q", "esc"), key.WithHelp("q/esc", "back to browse")),
+		Help:              key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 	}
 }
 

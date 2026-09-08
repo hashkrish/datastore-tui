@@ -40,6 +40,8 @@ const (
 	screenQueryValue
 	screenQueryPastePicker
 	screenOrder
+	screenRefKind
+	screenRefProperty
 	screenHelp
 )
 
@@ -119,6 +121,24 @@ type Model struct {
 	orderProperty   string
 	orderDescending bool
 	activeOrder     *client.Order
+
+	// Cross-kind reference query ("ctrl+f"/"F" in browse mode on a
+	// highlighted entity's key, or in detail mode on a highlighted scalar
+	// property): screenRefKind fills in refTargetKind via refKindForm
+	// (options loaded non-destructively into refKinds, not nav's real Kind
+	// column — the user may cancel), then screenRefProperty fills in
+	// refProperty via refPropertyForm, at which point the flow commits — see
+	// updateRefPropertyForm. refAddToExisting distinguishes "F" (AND-combine
+	// onto the active query, if staying on the same kind) from "ctrl+f"
+	// (always clear first).
+	refValue         model.Value
+	refSourceKind    string
+	refAddToExisting bool
+	refKinds         []string
+	refKindForm      *huh.Form
+	refTargetKind    string
+	refPropertyForm  *huh.Form
+	refProperty      string
 
 	chordG keymap.Chord
 	chordD keymap.Chord
@@ -254,6 +274,28 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m.openOrderForm(msg.properties)
 
+	case refKindsLoadedMsg:
+		m.status = ""
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		if msg.namespace != m.namespace {
+			return m, nil
+		}
+		return m.openRefKindForm(msg.kinds)
+
+	case refPropertiesLoadedMsg:
+		m.status = ""
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		if msg.namespace != m.namespace || msg.kind != m.refTargetKind {
+			return m, nil
+		}
+		return m.openRefPropertyForm(msg.properties)
+
 	case entitySavedMsg:
 		if msg.err != nil {
 			m.err = msg.err
@@ -311,6 +353,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateQueryValue(msg)
 	case screenOrder:
 		return m.updateOrderForm(msg)
+	case screenRefKind:
+		return m.updateRefKindForm(msg)
+	case screenRefProperty:
+		return m.updateRefPropertyForm(msg)
 	}
 	return m, nil
 }
@@ -344,6 +390,10 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.updateQueryPastePicker(msg)
 	case screenOrder:
 		return m.updateOrderForm(msg)
+	case screenRefKind:
+		return m.updateRefKindForm(msg)
+	case screenRefProperty:
+		return m.updateRefPropertyForm(msg)
 	case screenConfirmDeleteEntity, screenConfirmDeleteItem, screenConfirmQuit, screenConfirmRefresh:
 		return m.updateConfirm(msg)
 	case screenConfirmClearBookmarks:
@@ -385,6 +435,10 @@ func (m *Model) viewBody() string {
 		return m.viewQueryPastePicker(contentHeight)
 	case screenOrder:
 		return m.viewOrderForm()
+	case screenRefKind:
+		return "Find references — target kind\n\n" + m.refKindForm.View()
+	case screenRefProperty:
+		return "Find references — property to match\n\n" + m.refPropertyForm.View()
 	case screenConfirmDeleteEntity:
 		return "Delete entity " + entityLabel(m.nav.SelectedEntity()) + "? Press y to confirm, any other key to cancel."
 	case screenConfirmQuit:
@@ -424,6 +478,20 @@ func (m *Model) bookmarkLabels() []string {
 // browse mode, step 1). Unlike screenNewItemValue's type-select step, this
 // doesn't reuse viewDetailScreen — there's no open entity/breadcrumb here,
 // since a query is launched from browse, not detail, mode.
+// formHeight returns the row budget for a huh.Form rendered under a
+// "<Title> <kind>\n\n" header (viewQueryFilter, viewOrderForm), accounting
+// for that two-line header plus the one-line status bar View always appends
+// below the body. Without a height, huh's Select fields render every
+// option unbounded, so a kind with many properties pushes the header (and
+// the form's own top) off the top of the terminal instead of scrolling.
+func formHeight(termHeight int) int {
+	h := termHeight - 3
+	if h < 1 {
+		h = 1
+	}
+	return h
+}
+
 func (m *Model) viewQueryFilter() string {
 	kind, _ := m.nav.SelectedKind()
 	return "Query " + kind + "\n\n" + m.queryFilterForm.View()
@@ -566,24 +634,29 @@ Browse mode:
   enter          open selected entity
   o              new entity (Entity column)
   dd             delete selected entity (Entity column)
+  ctrl+b         bookmark/unbookmark selected entity (Entity column)
   R              refresh focused column
-  Q              query: filter the current kind's entities by a property
+  f              query: filter the current kind's entities by a property
                  (press again to AND another filter onto the current query)
   C              clear all active filters
   O              order: sort the current kind's entities by a property
+  ctrl+f         find references: query another kind by this entity's key
+                 (clears any active query first)
+  F              same as ctrl+f, but AND-combines onto the active query
+                 instead of clearing it (only when staying on the same kind)
   yy             copy the selected entity's key to the clipboard
   ctrl+l         open bookmarks (jump to a bookmarked entity)
   q, ctrl+c      quit
   (right pane previews the highlighted entity's properties)
 
 Bookmark picker (ctrl+l):
-  j/k, up/down   move
+  j/k, up/down, ctrl+n/ctrl+p move
   enter, l       open the selected bookmark
   dd             delete the selected bookmark (no confirmation)
   C              clear all bookmarks (with confirmation)
   esc, q         back
 
-Query filter (Q):
+Query filter (f):
   enter          confirm each step (property/operator/type, then value)
   esc            cancel back to browse
   ctrl+p         (Key values only) paste from a bookmark, with live preview
@@ -605,6 +678,10 @@ Detail mode (viewing/editing an entity):
   r              reload from the database (confirms first if you have unsaved edits)
   ctrl+]         open the entity a selected Key property points at
                  (h/esc backs out to the entity you followed it from)
+  ctrl+f         find references: query another kind by this property's value
+                 (clears any active query first; prompts if you have unsaved edits)
+  F              same as ctrl+f, but AND-combines onto the active query
+                 instead of clearing it (only when staying on the same kind)
   yy             copy the selected property's value to the clipboard
   ctrl+b         bookmark/unbookmark the current entity
   ctrl+l         open bookmarks (jump to a bookmarked entity)

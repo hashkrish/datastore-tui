@@ -149,6 +149,14 @@ func (m *Model) openQueryFilterForm(properties []string) (tea.Model, tea.Cmd) {
 	if m.width > 0 {
 		m.queryFilterForm = m.queryFilterForm.WithWidth(m.width)
 	}
+	// Without an explicit height, huh's Select renders every option
+	// (unbounded), and a kind with many properties pushes the "Query <kind>"
+	// header and the field's own title off the top of the terminal. formHeight
+	// accounts for the status line and the two-line header viewQueryFilter
+	// prepends, so the form scrolls internally instead.
+	if h := formHeight(m.height); h > 0 {
+		m.queryFilterForm = m.queryFilterForm.WithHeight(h)
+	}
 	m.screen = screenQueryFilter
 	return m, m.queryFilterForm.Init()
 }

@@ -115,6 +115,16 @@ func (m *Model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.chordY.Reset()
 		return m.startBookmarkList()
 
+	case key.Matches(msg, km.FindReferences):
+		m.chordD.Reset()
+		m.chordY.Reset()
+		return m.startRefQueryFromDetail(false)
+
+	case key.Matches(msg, km.FindReferencesAdd):
+		m.chordD.Reset()
+		m.chordY.Reset()
+		return m.startRefQueryFromDetail(true)
+
 	case key.Matches(msg, km.DeleteItem):
 		if m.chordD.Complete('d') {
 			if m.blockReadOnly() {
@@ -310,15 +320,23 @@ func (m *Model) openEntity(e *model.Entity) (tea.Model, tea.Cmd) {
 // toggleBookmark implements "ctrl+b" in detail mode: bookmarking or
 // unbookmarking the entity currently open, persisted to disk.
 func (m *Model) toggleBookmark() (tea.Model, tea.Cmd) {
-	if m.currentEntity == nil || m.currentEntity.Key == nil {
+	return m.toggleBookmarkFor(m.currentEntity)
+}
+
+// toggleBookmarkFor bookmarks or unbookmarks e, persisted to disk. Shared by
+// "ctrl+b" in detail mode (e is the open entity) and browse mode (e is
+// whichever entity is highlighted in the Entity column), so a bookmark can
+// be added without first opening the entity.
+func (m *Model) toggleBookmarkFor(e *model.Entity) (tea.Model, tea.Cmd) {
+	if e == nil || e.Key == nil {
 		return m, nil
 	}
-	key := m.currentEntity.Key
+	key := e.Key
 	if idx := bookmarkIndex(m.bookmarks, key); idx >= 0 {
 		m.bookmarks = append(m.bookmarks[:idx], m.bookmarks[idx+1:]...)
 		m.status = "bookmark removed"
 	} else {
-		label := entityLabel(m.currentEntity)
+		label := entityLabel(e)
 		if m.namespace != "" && m.namespace != query.DefaultNamespaceLabel {
 			label = m.namespace + "/" + label
 		}
@@ -347,22 +365,22 @@ func (m *Model) startBookmarkList() (tea.Model, tea.Cmd) {
 	return m, lookupBookmarksCmd(m.client, m.bookmarks)
 }
 
-// updateBookmarkList drives the bookmark picker: j/k move the highlighted
-// bookmark (whose preview panel updates as a side effect of viewBookmarks
-// reading m.bookmarkCursor), enter opens it, dd deletes it (no confirmation
-// — bookmarks are just local pointers, not Datastore data), esc/q cancels
-// back out.
+// updateBookmarkList drives the bookmark picker: j/k (or ctrl+n/ctrl+p) move
+// the highlighted bookmark (whose preview panel updates as a side effect of
+// viewBookmarks reading m.bookmarkCursor), enter opens it, dd deletes it (no
+// confirmation — bookmarks are just local pointers, not Datastore data),
+// esc/q cancels back out.
 func (m *Model) updateBookmarkList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if msg.String() != "d" {
 		m.chordD.Reset()
 	}
 	switch msg.String() {
-	case "j", "down":
+	case "j", "down", "ctrl+n":
 		if m.bookmarkCursor < len(m.bookmarks)-1 {
 			m.bookmarkCursor++
 		}
 		return m, nil
-	case "k", "up":
+	case "k", "up", "ctrl+p":
 		if m.bookmarkCursor > 0 {
 			m.bookmarkCursor--
 		}

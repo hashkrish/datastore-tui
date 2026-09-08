@@ -76,11 +76,23 @@ func (m *Model) updateBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, km.ListBookmarks):
 		return m.startBookmarkList()
 
+	case key.Matches(msg, km.ToggleBookmark):
+		if m.nav.Focus != nav.ColumnEntity {
+			return m, nil
+		}
+		return m.toggleBookmarkFor(m.nav.SelectedEntity())
+
 	case key.Matches(msg, km.Query):
 		return m.startQuery()
 
 	case key.Matches(msg, km.Order):
 		return m.startOrder()
+
+	case key.Matches(msg, km.FindReferences):
+		return m.startRefQueryFromBrowse(false)
+
+	case key.Matches(msg, km.FindReferencesAdd):
+		return m.startRefQueryFromBrowse(true)
 
 	case key.Matches(msg, km.ClearFilters):
 		return m.clearFilters()

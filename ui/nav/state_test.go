@@ -152,6 +152,26 @@ func TestState_SetKinds_ResetsFilterAndSelection(t *testing.T) {
 	}
 }
 
+func TestState_SelectKind(t *testing.T) {
+	s := NewState()
+	s.SetKinds([]string{"Alpha", "Beta", "Gamma"})
+
+	if !s.SelectKind("Gamma") {
+		t.Fatal("SelectKind(Gamma) = false, want true")
+	}
+	if got, ok := s.SelectedKind(); !ok || got != "Gamma" {
+		t.Fatalf("SelectedKind() = %q, %v, want Gamma, true", got, ok)
+	}
+
+	if s.SelectKind("Nope") {
+		t.Fatal("SelectKind(Nope) = true, want false for a kind not in the list")
+	}
+	// A failed SelectKind must not disturb the existing selection.
+	if got, ok := s.SelectedKind(); !ok || got != "Gamma" {
+		t.Fatalf("SelectedKind() after failed SelectKind = %q, %v, want Gamma, true", got, ok)
+	}
+}
+
 func TestState_SelectedEntity(t *testing.T) {
 	s := NewState()
 	page := &client.QueryPage{Entities: []*model.Entity{entityWithName("alice"), entityWithName("bob")}}
