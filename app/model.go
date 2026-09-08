@@ -34,6 +34,7 @@ const (
 	screenConfirmDeleteItem
 	screenConfirmQuit
 	screenConfirmRefresh
+	screenConfirmClearBookmarks
 	screenBookmarks
 	screenQueryFilter
 	screenQueryValue
@@ -345,6 +346,8 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.updateOrderForm(msg)
 	case screenConfirmDeleteEntity, screenConfirmDeleteItem, screenConfirmQuit, screenConfirmRefresh:
 		return m.updateConfirm(msg)
+	case screenConfirmClearBookmarks:
+		return m.updateConfirmClearBookmarks(msg)
 	case screenHelp:
 		m.screen = m.prevScreen
 		return m, nil
@@ -386,6 +389,8 @@ func (m *Model) viewBody() string {
 		return "Delete entity " + entityLabel(m.nav.SelectedEntity()) + "? Press y to confirm, any other key to cancel."
 	case screenConfirmQuit:
 		return "Unsaved changes will be lost. Press y to quit anyway, any other key to cancel."
+	case screenConfirmClearBookmarks:
+		return "Clear all bookmarks? Press y to confirm, any other key to cancel."
 	case screenHelp:
 		return helpText()
 	default:
@@ -570,6 +575,13 @@ Browse mode:
   ctrl+l         open bookmarks (jump to a bookmarked entity)
   q, ctrl+c      quit
   (right pane previews the highlighted entity's properties)
+
+Bookmark picker (ctrl+l):
+  j/k, up/down   move
+  enter, l       open the selected bookmark
+  dd             delete the selected bookmark (no confirmation)
+  C              clear all bookmarks (with confirmation)
+  esc, q         back
 
 Query filter (Q):
   enter          confirm each step (property/operator/type, then value)

@@ -349,8 +349,13 @@ func (m *Model) startBookmarkList() (tea.Model, tea.Cmd) {
 
 // updateBookmarkList drives the bookmark picker: j/k move the highlighted
 // bookmark (whose preview panel updates as a side effect of viewBookmarks
-// reading m.bookmarkCursor), enter opens it, esc/q cancels back out.
+// reading m.bookmarkCursor), enter opens it, dd deletes it (no confirmation
+// — bookmarks are just local pointers, not Datastore data), esc/q cancels
+// back out.
 func (m *Model) updateBookmarkList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.String() != "d" {
+		m.chordD.Reset()
+	}
 	switch msg.String() {
 	case "j", "down":
 		if m.bookmarkCursor < len(m.bookmarks)-1 {
@@ -364,10 +369,76 @@ func (m *Model) updateBookmarkList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "enter", "l", "right":
 		return m.openBookmark(m.bookmarkCursor)
+	case "d":
+		if m.chordD.Complete('d') {
+			return m.deleteSelectedBookmark()
+		}
+		m.chordD.Arm('d')
+		return m, nil
+	case "C":
+		if len(m.bookmarks) == 0 {
+			return m, nil
+		}
+		m.screen = screenConfirmClearBookmarks
+		return m, nil
 	case "esc", "q":
 		m.screen = m.prevScreen
 		return m, nil
 	}
+	return m, nil
+}
+
+// deleteSelectedBookmark implements "dd" in the bookmark picker: removes the
+// highlighted bookmark and persists the change immediately, with no
+// confirmation prompt (unlike entity/array-item deletion, this only affects
+// a local pointer, not data in Datastore). Closes the picker if that was the
+// last bookmark.
+func (m *Model) deleteSelectedBookmark() (tea.Model, tea.Cmd) {
+	if m.bookmarkCursor < 0 || m.bookmarkCursor >= len(m.bookmarks) {
+		return m, nil
+	}
+	removed := m.bookmarks[m.bookmarkCursor]
+	m.bookmarks = append(m.bookmarks[:m.bookmarkCursor:m.bookmarkCursor], m.bookmarks[m.bookmarkCursor+1:]...)
+	if err := saveBookmarks(m.bookmarks); err != nil {
+		m.err = err
+	}
+	if removed.Key != nil {
+		delete(m.bookmarkEntities, removed.Key.String())
+	}
+	if m.bookmarkCursor >= len(m.bookmarks) {
+		m.bookmarkCursor = len(m.bookmarks) - 1
+	}
+	m.status = "bookmark deleted"
+	if len(m.bookmarks) == 0 {
+		m.screen = m.prevScreen
+	}
+	return m, nil
+}
+
+// updateConfirmClearBookmarks drives the "C" confirmation prompt. It always
+// returns to the bookmark picker (never m.prevScreen, which still holds the
+// screen the picker itself was opened from and must survive this nested
+// confirm untouched, so "esc"/"q" from the picker keeps working afterward).
+func (m *Model) updateConfirmClearBookmarks(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.String() == "y" {
+		return m.clearAllBookmarks()
+	}
+	m.screen = screenBookmarks
+	return m, nil
+}
+
+// clearAllBookmarks implements "C" (with confirmation) in the bookmark
+// picker: removes every saved bookmark and returns to the (now empty)
+// picker.
+func (m *Model) clearAllBookmarks() (tea.Model, tea.Cmd) {
+	m.bookmarks = nil
+	m.bookmarkEntities = nil
+	m.bookmarkCursor = 0
+	if err := saveBookmarks(m.bookmarks); err != nil {
+		m.err = err
+	}
+	m.status = "all bookmarks cleared"
+	m.screen = screenBookmarks
 	return m, nil
 }
 
