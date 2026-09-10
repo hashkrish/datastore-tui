@@ -661,7 +661,9 @@ Browse mode:
   ctrl+b         bookmark/unbookmark selected entity (Entity column)
   R              refresh focused column
   f              query: filter the current kind's entities by a property
-                 (press again to AND another filter onto the current query)
+                 (press again to AND another filter onto the current query;
+                 the property picker also offers __key__, to filter/lookup
+                 by the entity's own key instead of a regular property)
   C              clear all active filters
   O              order: sort the current kind's entities by a property
   ctrl+f         find references: query another kind by this entity's key

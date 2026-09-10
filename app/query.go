@@ -27,6 +27,17 @@ var queryValueKinds = []model.ValueKind{
 	model.KindKey,
 }
 
+// keyPropertyName is Datastore's pseudo-property for an entity's own key —
+// already used internally (query.ListProperties' ancestor filter,
+// query.ListEntitiesPage/QueryEntitiesPage's default order) and, per
+// Datastore's structured-query API, just as filterable as any real property
+// via client.PropertyFilter (which takes a free-form property name). Offered
+// as a synthetic extra option in the query filter's property picker — see
+// openQueryFilterForm — since it never appears in ListProperties' __property__
+// metadata results (a kind's entities all have a key, but it isn't tracked
+// as one of their typed properties).
+const keyPropertyName = "__key__"
+
 var queryOps = []client.FilterOp{
 	client.OpEqual,
 	client.OpLessThan,
@@ -122,14 +133,15 @@ func (m *Model) openQueryFilterForm(properties []string) (tea.Model, tea.Cmd) {
 
 	var propertyField huh.Field
 	if len(properties) > 0 {
-		propOpts := make([]huh.Option[string], len(properties))
-		for i, p := range properties {
-			propOpts[i] = huh.NewOption(p, p)
+		propOpts := make([]huh.Option[string], 0, len(properties)+1)
+		propOpts = append(propOpts, huh.NewOption(keyPropertyName+" (this entity's key)", keyPropertyName))
+		for _, p := range properties {
+			propOpts = append(propOpts, huh.NewOption(p, p))
 		}
 		m.queryProperty = properties[0]
 		propertyField = huh.NewSelect[string]().Title("Property").Options(propOpts...).Value(&m.queryProperty).Filtering(true)
 	} else {
-		propertyField = huh.NewInput().Title("Property (none found for this kind)").Value(&m.queryProperty)
+		propertyField = huh.NewInput().Title("Property (none found for this kind; try " + keyPropertyName + ")").Value(&m.queryProperty)
 	}
 
 	opOpts := make([]huh.Option[client.FilterOp], len(queryOps))
@@ -175,6 +187,15 @@ func (m *Model) updateQueryFilter(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.screen = screenBrowse
 			return m, nil
 		}
+		// A "__key__" filter only ever makes sense against a Key value —
+		// override whatever the value-type field was left at (it still
+		// shows in the form, since huh has no easy way to hide it
+		// reactively within the same field group) so picking __key__
+		// always lands on the Key editor without an extra manual step.
+		isKeyProperty := m.queryProperty == keyPropertyName
+		if isKeyProperty {
+			m.queryValueKind = model.KindKey
+		}
 		zero := edit.ZeroValue(m.queryValueKind)
 		if m.queryValueKind == model.KindKey && zero.KeyValue != nil {
 			// A Key filter value typed by hand (as opposed to ctrl+p pasting
@@ -183,6 +204,15 @@ func (m *Model) updateQueryFilter(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// namespace this query actually runs against, so a hand-typed
 			// Key filter would never match an entity outside it.
 			zero.KeyValue.NamespaceID = resolveNamespaceID(m.namespace)
+			if isKeyProperty {
+				// Filtering/looking up by the entity's own key always stays
+				// within the kind being queried, so the "Key kind" field
+				// can be pre-filled instead of making the user retype the
+				// kind name they just picked this whole query against.
+				if kind, ok := m.nav.SelectedKind(); ok {
+					zero.KeyValue.Path[len(zero.KeyValue.Path)-1].Kind = kind
+				}
+			}
 		}
 		fe, ok := edit.NewFieldEditor(zero, m.width)
 		if !ok {
@@ -192,7 +222,14 @@ func (m *Model) updateQueryFilter(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.fieldEditor = fe
 		m.screen = screenQueryValue
-		return m, fe.Form().Init()
+		cmd := fe.Form().Init()
+		if isKeyProperty {
+			// The kind is already filled in (above); skip straight past it
+			// to the ID field rather than leaving the cursor on a field
+			// there's nothing left to type into.
+			cmd = tea.Batch(cmd, fe.Form().NextField())
+		}
+		return m, cmd
 	case huh.StateAborted:
 		m.screen = screenBrowse
 		return m, nil
