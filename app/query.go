@@ -118,7 +118,7 @@ func (m *Model) startQuery() (tea.Model, tea.Cmd) {
 	}
 	m.namespace = ns
 	m.status = "loading properties..."
-	return m, loadPropertiesCmd(m.client, ns, kind)
+	return m, loadPropertiesCmd(m.client, m.id, ns, kind)
 }
 
 // openQueryFilterForm builds queryFilterForm once loadPropertiesCmd
@@ -269,7 +269,7 @@ func (m *Model) updateQueryValue(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.screen = screenBrowse
 		m.status = "querying..."
 		kind, _ := m.nav.SelectedKind()
-		return m, runFilteredQueryCmd(m.client, m.namespace, kind, m.activeFilters, m.activeOrder, "", false)
+		return m, runFilteredQueryCmd(m.client, m.id, m.namespace, kind, m.activeFilters, m.activeOrder, "", false)
 	case huh.StateAborted:
 		m.fieldEditor = nil
 		m.screen = screenBrowse

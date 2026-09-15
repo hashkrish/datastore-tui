@@ -17,7 +17,12 @@ var (
 // under breadcrumb, highlighting the row at selected.
 func RenderDetail(breadcrumb string, rows []DetailRow, selected int, width, height int) string {
 	var b strings.Builder
-	b.WriteString(breadcrumbStyle.Render(breadcrumb))
+	// Unlike every row below it, breadcrumb has no natural upper bound on
+	// length (namespace/kind/id, plus a nested-path segment per level
+	// drilled into) — truncate it to width so a long one can't wrap in the
+	// terminal itself and silently push everything below (and, via the
+	// resulting scroll, the tab bar above it) down by a row.
+	b.WriteString(breadcrumbStyle.Render(truncate(breadcrumb, width-2)))
 	b.WriteString("\n\n")
 
 	if len(rows) == 0 {

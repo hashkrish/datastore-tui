@@ -23,7 +23,7 @@ func (m *Model) startOrder() (tea.Model, tea.Cmd) {
 	}
 	m.namespace = ns
 	m.status = "loading properties..."
-	return m, loadOrderPropertiesCmd(m.client, ns, kind)
+	return m, loadOrderPropertiesCmd(m.client, m.id, ns, kind)
 }
 
 // openOrderForm builds orderForm once loadOrderPropertiesCmd resolves,
@@ -84,9 +84,9 @@ func (m *Model) updateOrderForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.status = "querying..."
 		kind, _ := m.nav.SelectedKind()
 		if len(m.activeFilters) > 0 {
-			return m, runFilteredQueryCmd(m.client, m.namespace, kind, m.activeFilters, m.activeOrder, "", false)
+			return m, runFilteredQueryCmd(m.client, m.id, m.namespace, kind, m.activeFilters, m.activeOrder, "", false)
 		}
-		return m, loadEntitiesCmd(m.client, m.namespace, kind, "", false, m.activeOrder)
+		return m, loadEntitiesCmd(m.client, m.id, m.namespace, kind, "", false, m.activeOrder)
 	case huh.StateAborted:
 		m.screen = screenBrowse
 		return m, nil

@@ -170,6 +170,29 @@ func DefaultTableKeyMap() TableKeyMap {
 	}
 }
 
+// TabKeyMap covers tab management (opening/closing/switching independent
+// browse sessions), active alongside BrowseKeyMap/DetailKeyMap/TableKeyMap —
+// see app.handleTabKey, which only consults it while the active tab sits on
+// one of the "stable" screens (browse/detail/table), not mid-form.
+type TabKeyMap struct {
+	NewTab   key.Binding // ctrl+t: open a new tab
+	CloseTab key.Binding // ctrl+w: close the active tab
+	NextTab  key.Binding // tab: cycle to the next tab
+	PrevTab  key.Binding // shift+tab: cycle to the previous tab
+	// Jumping directly to a tab ("1"-"9") is matched by raw digit runes
+	// rather than a key.Binding — see app.handleTabKey.
+}
+
+// DefaultTabKeyMap returns the standard tab-management bindings.
+func DefaultTabKeyMap() TabKeyMap {
+	return TabKeyMap{
+		NewTab:   key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "new tab")),
+		CloseTab: key.NewBinding(key.WithKeys("ctrl+w"), key.WithHelp("ctrl+w", "close tab")),
+		NextTab:  key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next tab")),
+		PrevTab:  key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "previous tab")),
+	}
+}
+
 // FilterKeyMap covers the in-column "/" incremental filter input.
 type FilterKeyMap struct {
 	Confirm key.Binding

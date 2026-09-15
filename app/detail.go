@@ -87,7 +87,7 @@ func (m *Model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.status = "saving..."
-		return m, saveEntityCmd(m.client, m.currentEntity)
+		return m, saveEntityCmd(m.client, m.id, m.currentEntity)
 
 	case key.Matches(msg, km.AddItem):
 		if m.blockReadOnly() {
@@ -267,7 +267,7 @@ func (m *Model) goToKey(key *model.Key, pushHistory bool) (tea.Model, tea.Cmd) {
 			}
 			mm.dirty.Reset()
 			mm.status = "loading..."
-			return mm, lookupKeyCmd(mm.client, key)
+			return mm, lookupKeyCmd(mm.client, mm.id, key)
 		}
 		m.screen = screenConfirmQuit
 		return m, nil
@@ -276,7 +276,7 @@ func (m *Model) goToKey(key *model.Key, pushHistory bool) (tea.Model, tea.Cmd) {
 		m.pushEntityFrame()
 	}
 	m.status = "loading..."
-	return m, lookupKeyCmd(m.client, key)
+	return m, lookupKeyCmd(m.client, m.id, key)
 }
 
 // startRefreshEntity implements "r" in detail mode: reloads the current
@@ -293,28 +293,30 @@ func (m *Model) startRefreshEntity() (tea.Model, tea.Cmd) {
 		m.prevScreen = screenDetail
 		m.confirmYes = func(mm *Model) (tea.Model, tea.Cmd) {
 			mm.status = "refreshing..."
-			return mm, lookupKeyCmd(mm.client, key)
+			return mm, lookupKeyCmd(mm.client, mm.id, key)
 		}
 		m.screen = screenConfirmRefresh
 		return m, nil
 	}
 	m.status = "refreshing..."
-	return m, lookupKeyCmd(m.client, key)
+	return m, lookupKeyCmd(m.client, m.id, key)
 }
 
 // openEntity opens e in the detail view directly, without a Lookup round
 // trip — used once an entity has already been fetched (a keyLookupMsg
-// result, or a bookmark preview picked from the picker).
-func (m *Model) openEntity(e *model.Entity) (tea.Model, tea.Cmd) {
-	m.status = ""
-	m.currentEntity = e
-	m.namespace = namespaceLabel(e.Key.NamespaceID)
-	m.detailPath.Reset()
-	m.detailSelected = 0
-	m.detailFilter = ""
-	m.dirty.Reset()
-	m.detailOrigin = screenBrowse
-	m.screen = screenDetail
+// result, or a bookmark preview picked from the picker). t is the tab this
+// applies to: the one that originated the lookup, which may not be the
+// currently active tab by the time the result arrives.
+func (m *Model) openEntity(t *tab, e *model.Entity) (tea.Model, tea.Cmd) {
+	t.status = ""
+	t.currentEntity = e
+	t.namespace = namespaceLabel(e.Key.NamespaceID)
+	t.detailPath.Reset()
+	t.detailSelected = 0
+	t.detailFilter = ""
+	t.dirty.Reset()
+	t.detailOrigin = screenBrowse
+	t.screen = screenDetail
 	return m, nil
 }
 
@@ -480,12 +482,12 @@ func (m *Model) openBookmark(idx int) (tea.Model, tea.Cmd) {
 	if m.dirty.Dirty() {
 		m.prevScreen = m.screen
 		m.confirmYes = func(mm *Model) (tea.Model, tea.Cmd) {
-			return mm.openEntity(e)
+			return mm.openEntity(mm.tab, e)
 		}
 		m.screen = screenConfirmQuit
 		return m, nil
 	}
-	return m.openEntity(e)
+	return m.openEntity(m.tab, e)
 }
 
 // detailBack implements "h"/"esc" in detail mode: stepping out one nesting

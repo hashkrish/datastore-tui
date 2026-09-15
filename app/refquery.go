@@ -86,7 +86,7 @@ func (m *Model) startRefQuery(value model.Value, addToExisting bool) (tea.Model,
 	m.refTargetKind = ""
 	m.refProperty = ""
 	m.status = "loading kinds..."
-	return m, loadRefKindsCmd(m.client, m.namespace)
+	return m, loadRefKindsCmd(m.client, m.id, m.namespace)
 }
 
 // openRefKindForm builds refKindForm once loadRefKindsCmd resolves — a
@@ -128,7 +128,7 @@ func (m *Model) updateRefKindForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m.refKindForm.State {
 	case huh.StateCompleted:
 		m.status = "loading properties..."
-		return m, loadRefPropertiesCmd(m.client, m.namespace, m.refTargetKind)
+		return m, loadRefPropertiesCmd(m.client, m.id, m.namespace, m.refTargetKind)
 	case huh.StateAborted:
 		m.screen = m.prevScreen
 		return m, nil
@@ -205,7 +205,7 @@ func (m *Model) updateRefPropertyForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.screen = screenBrowse
 		m.status = "querying..."
-		return m, runFilteredQueryCmd(m.client, m.namespace, m.refTargetKind, m.activeFilters, m.activeOrder, "", false)
+		return m, runFilteredQueryCmd(m.client, m.id, m.namespace, m.refTargetKind, m.activeFilters, m.activeOrder, "", false)
 	case huh.StateAborted:
 		m.screen = screenBrowse
 		return m, nil

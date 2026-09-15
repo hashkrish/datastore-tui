@@ -31,7 +31,7 @@ func (m *Model) updateTable(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch {
 	case key.Matches(msg, km.Quit):
-		return m, tea.Quit
+		return m.requestQuit()
 
 	case key.Matches(msg, km.Help):
 		m.prevScreen = screenTable

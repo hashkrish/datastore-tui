@@ -6,14 +6,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/krishnan/datastore-tui/datastore/client"
 	"github.com/krishnan/datastore-tui/datastore/model"
-	"github.com/krishnan/datastore-tui/ui/edit"
-	"github.com/krishnan/datastore-tui/ui/keymap"
 	"github.com/krishnan/datastore-tui/ui/nav"
 	"github.com/krishnan/datastore-tui/ui/panes"
 )
@@ -58,125 +54,44 @@ const (
 	targetLeafRetype
 )
 
-// Model is the top-level bubbletea model.
+// Model is the top-level bubbletea model. It owns the state genuinely shared
+// across every tab (the Datastore client, read-only flag, bookmarks, and
+// terminal size) plus the tab list itself; everything else — Miller-column
+// navigation, the open detail view, active filters/order, in-flight forms —
+// lives on *tab (see app/tab.go). Model embeds a *tab pointing at the active
+// tab, so the bulk of app/*.go keeps referencing "m.nav", "m.screen", etc.
+// unchanged, always resolving to whichever tab is active.
 type Model struct {
-	client    *client.Client
-	namespace string // resolved (non-label) namespace backing the current kind/entity lists
-	readOnly  bool   // disables every mutating action; see blockReadOnly
-
-	nav        *nav.State
-	detailPath nav.DetailPath
-
-	currentEntity *model.Entity // non-nil while a detail view is open
-	dirty         edit.Tracker
-
-	// detailOrigin is the screen ("h"/"esc"/"q" out of the detail view's
-	// root) should return to: screenBrowse (the zero value, and every
-	// existing way of opening detail) or screenTable, when detail was
-	// opened via "enter" on a table-view row (see openEntityDetailFromTable
-	// in app/table.go). Deliberately separate from prevScreen, which is
-	// reused as scratch state for confirm/help overlays and gets
-	// overwritten en route through those flows.
-	detailOrigin screen
-
-	tableState *nav.TableState // non-nil while screenTable is active
-
-	// entityStack holds the detail-view state to return to when "h"/"esc"
-	// backs out past the root of an entity reached via "ctrl+]" (following a
-	// Key-typed property) — see followKeyProperty/goToKey and detailBack.
-	// Empty for a detail view opened directly from browse, a bookmark, or a
-	// new entity, so backing out of those still lands in browse as before.
-	entityStack []entityFrame
-
-	screen         screen
-	prevScreen     screen // screen to return to after a confirm/help overlay
-	detailSelected int
-	detailFilter   string // substring filter over the current scope's rows
-
-	filterInput textinput.Model
-
-	fieldEditor    *edit.FieldEditor
-	editingSegment nav.PropSegment // which row's leaf value fieldEditor is editing
-
-	newItemKind      model.ValueKind
-	newItemTarget    newItemTarget
-	retypeOriginal   model.Value // pre-retype value, reused if the same type is re-picked
-	newItemTypeForm  *huh.Form
-	newEntityKeyForm *huh.Form
-	newEntityKeyKind string
-	newEntityKeyID   string
-	newEntityKeyName string
+	client   *client.Client
+	readOnly bool // disables every mutating action; see blockReadOnly
 
 	bookmarks        []bookmark
 	bookmarkCursor   int
 	bookmarkEntities map[string]*model.Entity // key.String() -> fetched entity, nil map while loading
 
-	// Query filter ("Q" in browse mode): screenQueryFilter fills in
-	// queryProperty/queryOp/queryValueKind via queryFilterForm, then
-	// screenQueryValue reuses fieldEditor to fill in the value (optionally
-	// via screenQueryPastePicker, for Key-typed values), appending the
-	// result to activeFilters. Pressing "Q" again while activeFilters is
-	// already non-empty adds another AND-combined filter rather than
-	// replacing it; activeFilters is non-empty once a query has run, so
-	// refreshing the Entity column re-runs it instead of reloading the plain
-	// list.
-	queryFilterForm  *huh.Form
-	queryProperty    string
-	queryOp          client.FilterOp
-	queryValueKind   model.ValueKind
-	queryPasteCursor int
-	activeFilters    []client.PropertyFilter
+	tabs      []*tab
+	active    int
+	nextTabID int
+	*tab      // the active tab; kept in sync with tabs[active] — see app/tabs.go
 
-	// Order by ("O" in browse mode): screenOrder fills in orderProperty/
-	// orderDescending via orderForm, then activeOrder is set on completion.
-	// Combines with activeFilters when both are set — see
-	// query.QueryEntitiesPage.
-	orderForm       *huh.Form
-	orderProperty   string
-	orderDescending bool
-	activeOrder     *client.Order
-
-	// Cross-kind reference query ("ctrl+f"/"F" in browse mode on a
-	// highlighted entity's key, or in detail mode on a highlighted scalar
-	// property): screenRefKind fills in refTargetKind via refKindForm
-	// (options loaded non-destructively into refKinds, not nav's real Kind
-	// column — the user may cancel), then screenRefProperty fills in
-	// refProperty via refPropertyForm, at which point the flow commits — see
-	// updateRefPropertyForm. refAddToExisting distinguishes "F" (AND-combine
-	// onto the active query, if staying on the same kind) from "ctrl+f"
-	// (always clear first).
-	refValue         model.Value
-	refSourceKind    string
-	refAddToExisting bool
-	refKinds         []string
-	refKindForm      *huh.Form
-	refTargetKind    string
-	refPropertyForm  *huh.Form
-	refProperty      string
-
-	chordG keymap.Chord
-	chordD keymap.Chord
-	chordY keymap.Chord
-
-	confirmYes func(*Model) (tea.Model, tea.Cmd)
+	confirmingQuit bool // cross-tab unsaved-edits guard on app quit, see requestQuit
 
 	width, height int
-	status        string
-	err           error
 }
 
-// New builds a fresh Model against c. When readOnly is true, every mutating
-// action (new/delete entity, retype/add/delete property, save) is blocked;
-// see blockReadOnly.
+// New builds a fresh Model against c, with a single starting tab. When
+// readOnly is true, every mutating action (new/delete entity,
+// retype/add/delete property, save) is blocked; see blockReadOnly.
 func New(c *client.Client, readOnly bool) *Model {
-	fi := textinput.New()
-	fi.Prompt = "/"
+	first := newTab(1)
 	return &Model{
-		client:      c,
-		readOnly:    readOnly,
-		nav:         nav.NewState(),
-		filterInput: fi,
-		bookmarks:   loadBookmarks(),
+		client:    c,
+		readOnly:  readOnly,
+		bookmarks: loadBookmarks(),
+		tabs:      []*tab{first},
+		active:    0,
+		tab:       first,
+		nextTabID: 2,
 	}
 }
 
@@ -196,7 +111,20 @@ func (m *Model) blockReadOnly() bool {
 }
 
 func (m *Model) Init() tea.Cmd {
-	return loadNamespacesCmd(m.client)
+	return loadNamespacesCmd(m.client, m.id)
+}
+
+// tabByID finds the tab an async command result belongs to, by the stable
+// id its issuing *Cmd was tagged with — not m.active/m.tab, which may have
+// moved on to a different tab by the time the result arrives. Reports false
+// if that tab has since been closed, in which case the result is dropped.
+func (m *Model) tabByID(id int) (*tab, bool) {
+	for _, t := range m.tabs {
+		if t.id == id {
+			return t, true
+		}
+	}
+	return nil, false
 }
 
 func (m *Model) currentScope() (model.Value, []panes.DetailRow, error) {
@@ -218,125 +146,165 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case namespacesLoadedMsg:
-		if msg.err != nil {
-			m.err = msg.err
+		t, ok := m.tabByID(msg.tabID)
+		if !ok {
 			return m, nil
 		}
-		m.nav.SetNamespaces(msg.namespaces)
-		return m, m.previewCmd()
+		if msg.err != nil {
+			t.err = msg.err
+			return m, nil
+		}
+		t.nav.SetNamespaces(msg.namespaces)
+		return m, m.previewCmd(t)
 
 	case kindsLoadedMsg:
+		t, ok := m.tabByID(msg.tabID)
+		if !ok {
+			return m, nil
+		}
 		if msg.err != nil {
-			m.err = msg.err
+			t.err = msg.err
 			return m, nil
 		}
 		// The namespace this page was fetched for may no longer be the one
 		// highlighted (fast j/k scrolling fires overlapping preview fetches
 		// that can resolve out of order) — drop it rather than show kinds
 		// for the wrong namespace.
-		if ns, ok := m.nav.SelectedNamespace(); !ok || ns != msg.namespace {
+		if ns, ok := t.nav.SelectedNamespace(); !ok || ns != msg.namespace {
 			return m, nil
 		}
-		m.nav.SetKinds(msg.kinds)
+		t.nav.SetKinds(msg.kinds)
 		// If this landed a real drill-in (Focus is now Kind, not just a
 		// Namespace-focused preview fetch), the Entity preview pane needs
 		// data for whichever kind SetKinds just selected.
-		if m.nav.Focus == nav.ColumnKind {
-			return m, m.previewCmd()
+		if t.nav.Focus == nav.ColumnKind {
+			return m, m.previewCmd(t)
 		}
 		return m, nil
 
 	case entitiesLoadedMsg:
+		t, ok := m.tabByID(msg.tabID)
+		if !ok {
+			return m, nil
+		}
 		if msg.err != nil {
-			m.err = msg.err
+			t.err = msg.err
 			return m, nil
 		}
-		if kind, ok := m.nav.SelectedKind(); !ok || kind != msg.kind {
+		if kind, ok := t.nav.SelectedKind(); !ok || kind != msg.kind {
 			return m, nil
 		}
-		if ns, ok := m.nav.SelectedNamespace(); !ok || ns != msg.namespace {
+		if ns, ok := t.nav.SelectedNamespace(); !ok || ns != msg.namespace {
 			return m, nil
 		}
-		m.nav.SetEntitiesPage(msg.page, msg.appendPage)
+		t.nav.SetEntitiesPage(msg.page, msg.appendPage)
 		return m, nil
 
 	case propertiesLoadedMsg:
-		m.status = ""
+		t, ok := m.tabByID(msg.tabID)
+		if !ok {
+			return m, nil
+		}
+		t.status = ""
 		if msg.err != nil {
-			m.err = msg.err
+			t.err = msg.err
 			return m, nil
 		}
-		if kind, ok := m.nav.SelectedKind(); !ok || kind != msg.kind {
+		if kind, ok := t.nav.SelectedKind(); !ok || kind != msg.kind {
 			return m, nil
 		}
-		if ns, ok := m.nav.SelectedNamespace(); !ok || ns != msg.namespace {
+		if ns, ok := t.nav.SelectedNamespace(); !ok || ns != msg.namespace {
 			return m, nil
 		}
 		return m.openQueryFilterForm(msg.properties)
 
 	case orderPropertiesLoadedMsg:
-		m.status = ""
+		t, ok := m.tabByID(msg.tabID)
+		if !ok {
+			return m, nil
+		}
+		t.status = ""
 		if msg.err != nil {
-			m.err = msg.err
+			t.err = msg.err
 			return m, nil
 		}
-		if kind, ok := m.nav.SelectedKind(); !ok || kind != msg.kind {
+		if kind, ok := t.nav.SelectedKind(); !ok || kind != msg.kind {
 			return m, nil
 		}
-		if ns, ok := m.nav.SelectedNamespace(); !ok || ns != msg.namespace {
+		if ns, ok := t.nav.SelectedNamespace(); !ok || ns != msg.namespace {
 			return m, nil
 		}
 		return m.openOrderForm(msg.properties)
 
 	case refKindsLoadedMsg:
-		m.status = ""
-		if msg.err != nil {
-			m.err = msg.err
+		t, ok := m.tabByID(msg.tabID)
+		if !ok {
 			return m, nil
 		}
-		if msg.namespace != m.namespace {
+		t.status = ""
+		if msg.err != nil {
+			t.err = msg.err
+			return m, nil
+		}
+		if msg.namespace != t.namespace {
 			return m, nil
 		}
 		return m.openRefKindForm(msg.kinds)
 
 	case refPropertiesLoadedMsg:
-		m.status = ""
-		if msg.err != nil {
-			m.err = msg.err
+		t, ok := m.tabByID(msg.tabID)
+		if !ok {
 			return m, nil
 		}
-		if msg.namespace != m.namespace || msg.kind != m.refTargetKind {
+		t.status = ""
+		if msg.err != nil {
+			t.err = msg.err
+			return m, nil
+		}
+		if msg.namespace != t.namespace || msg.kind != t.refTargetKind {
 			return m, nil
 		}
 		return m.openRefPropertyForm(msg.properties)
 
 	case entitySavedMsg:
-		if msg.err != nil {
-			m.err = msg.err
-			m.status = ""
+		t, ok := m.tabByID(msg.tabID)
+		if !ok {
 			return m, nil
 		}
-		m.dirty.Reset()
-		m.status = "saved"
+		if msg.err != nil {
+			t.err = msg.err
+			t.status = ""
+			return m, nil
+		}
+		t.dirty.Reset()
+		t.status = "saved"
 		return m, nil
 
 	case entityDeletedMsg:
-		if msg.err != nil {
-			m.err = msg.err
+		t, ok := m.tabByID(msg.tabID)
+		if !ok {
 			return m, nil
 		}
-		m.status = "deleted"
-		ns, _ := m.nav.SelectedNamespace()
-		kind, _ := m.nav.SelectedKind()
-		return m, loadEntitiesCmd(m.client, ns, kind, "", false, nil)
+		if msg.err != nil {
+			t.err = msg.err
+			return m, nil
+		}
+		t.status = "deleted"
+		ns, _ := t.nav.SelectedNamespace()
+		kind, _ := t.nav.SelectedKind()
+		return m, loadEntitiesCmd(m.client, t.id, ns, kind, "", false, nil)
 
 	case keyLookupMsg:
-		m.status = ""
-		if msg.err != nil {
-			m.err = msg.err
+		t, ok := m.tabByID(msg.tabID)
+		if !ok {
 			return m, nil
 		}
-		return m.openEntity(msg.entity)
+		t.status = ""
+		if msg.err != nil {
+			t.err = msg.err
+			return m, nil
+		}
+		return m.openEntity(t, msg.entity)
 
 	case bookmarksLookedUpMsg:
 		if msg.err != nil {
@@ -347,6 +315,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		if m.confirmingQuit {
+			return m.updateConfirmingQuit(msg)
+		}
 		return m.handleKey(msg)
 	}
 
@@ -377,6 +348,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.err = nil
+	if isStableScreen(m.screen) {
+		if handled, mm, cmd := m.handleTabKey(msg); handled {
+			return mm, cmd
+		}
+	}
 	switch m.screen {
 	case screenBrowse:
 		return m.updateBrowse(msg)
@@ -429,13 +405,35 @@ func (m *Model) View() string {
 	if m.width == 0 {
 		return "loading..."
 	}
-	body := m.viewBody()
-	statusLine := m.viewStatus()
-	return lipgloss.JoinVertical(lipgloss.Left, body, statusLine)
+	parts := make([]string, 0, 3)
+	if len(m.tabs) > 1 {
+		labels := make([]string, len(m.tabs))
+		for i, t := range m.tabs {
+			labels[i] = t.label()
+		}
+		parts = append(parts, panes.RenderTabBar(labels, m.active, m.width))
+	}
+	if m.confirmingQuit {
+		parts = append(parts, m.confirmingQuitMessage())
+	} else {
+		parts = append(parts, m.viewBody())
+	}
+	parts = append(parts, m.viewStatus())
+	return lipgloss.JoinVertical(lipgloss.Left, parts...)
+}
+
+// tabBarHeight is how many rows View reserves for the tab bar — one when
+// there's more than one tab, zero otherwise, so a single-tab session (the
+// common case) looks exactly as it did before tabs existed.
+func (m *Model) tabBarHeight() int {
+	if len(m.tabs) > 1 {
+		return 1
+	}
+	return 0
 }
 
 func (m *Model) viewBody() string {
-	contentHeight := m.height - 1
+	contentHeight := m.height - 1 - m.tabBarHeight()
 	switch m.screen {
 	case screenFilterInput:
 		return panes.RenderBrowse(m.nav, m.width, contentHeight-1) + "\n" + m.filterInput.View()
@@ -648,6 +646,13 @@ func entityLabel(e *model.Entity) string {
 
 func helpText() string {
 	return `Datastore TUI — Help
+
+Tabs (from browse, detail, or table view):
+  ctrl+t         open a new tab (starts fresh at the namespace list)
+  ctrl+w         close the active tab (confirms if it has unsaved edits;
+                 no-op on the last remaining tab)
+  tab/shift+tab  cycle to the next/previous tab
+  1-9            jump directly to a tab
 
 Browse mode:
   j/k, up/down   move

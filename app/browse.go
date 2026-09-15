@@ -13,7 +13,7 @@ func (m *Model) updateBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch {
 	case key.Matches(msg, km.Quit):
-		return m, tea.Quit
+		return m.requestQuit()
 
 	case key.Matches(msg, km.Help):
 		m.prevScreen = screenBrowse
@@ -25,34 +25,34 @@ func (m *Model) updateBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.chordD.Reset()
 		m.chordY.Reset()
 		m.nav.MoveBy(1)
-		return m, m.previewCmd()
+		return m, m.previewCmd(m.tab)
 
 	case key.Matches(msg, km.Up):
 		m.chordG.Reset()
 		m.chordD.Reset()
 		m.chordY.Reset()
 		m.nav.MoveBy(-1)
-		return m, m.previewCmd()
+		return m, m.previewCmd(m.tab)
 
 	case key.Matches(msg, km.Top):
 		if m.chordG.Complete('g') {
 			m.nav.MoveToTop()
-			return m, m.previewCmd()
+			return m, m.previewCmd(m.tab)
 		}
 		m.chordG.Arm('g')
 		return m, nil
 
 	case key.Matches(msg, km.Bottom):
 		m.nav.MoveToBottom()
-		return m, m.previewCmd()
+		return m, m.previewCmd(m.tab)
 
 	case key.Matches(msg, km.HalfPageDown):
 		m.nav.MoveBy(m.halfPage())
-		return m, m.previewCmd()
+		return m, m.previewCmd(m.tab)
 
 	case key.Matches(msg, km.HalfPageUp):
 		m.nav.MoveBy(-m.halfPage())
-		return m, m.previewCmd()
+		return m, m.previewCmd(m.tab)
 
 	case key.Matches(msg, km.Filter):
 		m.filterInput.SetValue(m.nav.Filter())
@@ -65,7 +65,7 @@ func (m *Model) updateBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.chordD.Reset()
 		m.chordY.Reset()
 		m.nav.FocusLeft()
-		return m, m.previewCmd()
+		return m, m.previewCmd(m.tab)
 
 	case key.Matches(msg, km.Right), key.Matches(msg, km.Open):
 		return m.drillIn()
@@ -122,7 +122,7 @@ func (m *Model) updateBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.confirmYes = func(mm *Model) (tea.Model, tea.Cmd) {
 					e := mm.nav.SelectedEntity()
 					mm.screen = screenBrowse
-					return mm, deleteEntityCmd(mm.client, e.Key)
+					return mm, deleteEntityCmd(mm.client, mm.id, e.Key)
 				}
 				m.screen = screenConfirmDeleteEntity
 			}
@@ -155,25 +155,25 @@ func (m *Model) updateBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // item's children live without drilling in. It's a no-op once focus reaches
 // the Entity column: the preview there is the already-loaded entity's own
 // properties, nothing to fetch.
-func (m *Model) previewCmd() tea.Cmd {
-	switch m.nav.Focus {
+func (m *Model) previewCmd(t *tab) tea.Cmd {
+	switch t.nav.Focus {
 	case nav.ColumnNamespace:
-		ns, ok := m.nav.SelectedNamespace()
+		ns, ok := t.nav.SelectedNamespace()
 		if !ok {
 			return nil
 		}
-		return loadKindsCmd(m.client, ns)
+		return loadKindsCmd(m.client, t.id, ns)
 
 	case nav.ColumnKind:
-		ns, ok := m.nav.SelectedNamespace()
+		ns, ok := t.nav.SelectedNamespace()
 		if !ok {
 			return nil
 		}
-		kind, ok := m.nav.SelectedKind()
+		kind, ok := t.nav.SelectedKind()
 		if !ok {
 			return nil
 		}
-		return loadEntitiesCmd(m.client, ns, kind, "", false, nil)
+		return loadEntitiesCmd(m.client, t.id, ns, kind, "", false, nil)
 
 	default:
 		return nil
@@ -191,7 +191,7 @@ func (m *Model) drillIn() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.namespace = ns
-		return m, loadKindsCmd(m.client, ns)
+		return m, loadKindsCmd(m.client, m.id, ns)
 
 	case nav.ColumnKind:
 		kind, ok := m.nav.SelectedKind()
@@ -203,7 +203,7 @@ func (m *Model) drillIn() (tea.Model, tea.Cmd) {
 		// Entity column no longer applies.
 		m.activeFilters = nil
 		m.activeOrder = nil
-		return m, loadEntitiesCmd(m.client, m.namespace, kind, "", false, nil)
+		return m, loadEntitiesCmd(m.client, m.id, m.namespace, kind, "", false, nil)
 
 	default: // ColumnEntity
 		e := m.nav.SelectedEntity()
@@ -227,22 +227,22 @@ func (m *Model) drillIn() (tea.Model, tea.Cmd) {
 func (m *Model) refreshFocused() (tea.Model, tea.Cmd) {
 	switch m.nav.Focus {
 	case nav.ColumnNamespace:
-		return m, loadNamespacesCmd(m.client)
+		return m, loadNamespacesCmd(m.client, m.id)
 	case nav.ColumnKind:
 		ns, ok := m.nav.SelectedNamespace()
 		if !ok {
 			return m, nil
 		}
-		return m, loadKindsCmd(m.client, ns)
+		return m, loadKindsCmd(m.client, m.id, ns)
 	default:
 		kind, ok := m.nav.SelectedKind()
 		if !ok {
 			return m, nil
 		}
 		if len(m.activeFilters) > 0 {
-			return m, runFilteredQueryCmd(m.client, m.namespace, kind, m.activeFilters, m.activeOrder, "", false)
+			return m, runFilteredQueryCmd(m.client, m.id, m.namespace, kind, m.activeFilters, m.activeOrder, "", false)
 		}
-		return m, loadEntitiesCmd(m.client, m.namespace, kind, "", false, m.activeOrder)
+		return m, loadEntitiesCmd(m.client, m.id, m.namespace, kind, "", false, m.activeOrder)
 	}
 }
 
@@ -258,7 +258,7 @@ func (m *Model) clearFilters() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.status = "querying..."
-	return m, loadEntitiesCmd(m.client, m.namespace, kind, "", false, m.activeOrder)
+	return m, loadEntitiesCmd(m.client, m.id, m.namespace, kind, "", false, m.activeOrder)
 }
 
 // startNewEntity opens the key-entry form for a brand new entity ("o" on
@@ -283,7 +283,7 @@ func (m *Model) updateFilterInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		m.nav.SetFilter(m.filterInput.Value())
 		m.screen = screenBrowse
-		return m, m.previewCmd()
+		return m, m.previewCmd(m.tab)
 	case "esc":
 		m.screen = screenBrowse
 		return m, nil

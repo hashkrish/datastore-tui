@@ -8,7 +8,8 @@ Browsing uses a ranger-style, three-column Miller-column layout
 entity's properties. Opening an entity switches to a dedicated detail view
 for recursively navigating and editing its (possibly nested) properties —
 arrays, embedded entities, geopoints, key references, and so on each get
-their own typed edit form.
+their own typed edit form. Multiple independent browse/detail sessions can
+be kept open at once as tabs.
 
 Works against the local [Datastore emulator](https://cloud.google.com/datastore/docs/tools/datastore-emulator)
 (no authentication) or a real GCP project, authenticated via Application
@@ -105,6 +106,15 @@ status line, and blocked actions report why nothing happened.
 `datastore-tui --version` prints build info; `datastore-tui -h` prints flag usage.
 
 ## Keybindings
+
+### Tabs (from browse, detail, or table view)
+
+| Key             | Action                          |
+|-----------------|----------------------------------|
+| `ctrl+t`        | open a new tab (starts fresh at the namespace list) |
+| `ctrl+w`        | close the active tab (confirms if it has unsaved edits; no-op on the last remaining tab) |
+| `tab`/`shift+tab` | cycle to the next/previous tab |
+| `1`-`9`         | jump directly to a tab          |
 
 ### Browse mode (Namespace / Kind / Entity columns)
 
