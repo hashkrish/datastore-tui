@@ -40,6 +40,7 @@ type BrowseKeyMap struct {
 	FindReferencesAdd        key.Binding // F: same, but AND-combines onto the active query instead of clearing it
 	Yank                     key.Binding // first "y" of "yy": copy the selected entity's key
 	ToggleTable              key.Binding // T: toggle table (spreadsheet) view of the current kind's entities
+	QuickJumpKind            key.Binding // ": jump straight to a kind's entities in the current namespace, via a filterable picker
 	Quit                     key.Binding
 	Help                     key.Binding
 	PendingG                 key.Binding // first "g" of "gg"
@@ -70,6 +71,7 @@ func DefaultBrowseKeyMap() BrowseKeyMap {
 		FindReferencesAdd: key.NewBinding(key.WithKeys("F"), key.WithHelp("F", "find references (add)")),
 		Yank:              key.NewBinding(key.WithKeys("y"), key.WithHelp("yy", "copy key")),
 		ToggleTable:       key.NewBinding(key.WithKeys("T"), key.WithHelp("T", "table view")),
+		QuickJumpKind:     key.NewBinding(key.WithKeys(":"), key.WithHelp(":", "jump to kind")),
 		Quit:              key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
 		Help:              key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 	}

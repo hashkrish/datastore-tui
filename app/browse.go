@@ -100,6 +100,9 @@ func (m *Model) updateBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, km.ToggleTable):
 		return m.openTableView()
 
+	case key.Matches(msg, km.QuickJumpKind):
+		return m.startKindJump()
+
 	case key.Matches(msg, km.Add):
 		if m.nav.Focus == nav.ColumnEntity {
 			if m.blockReadOnly() {

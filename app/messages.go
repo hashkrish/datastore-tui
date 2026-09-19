@@ -94,6 +94,17 @@ type refPropertiesLoadedMsg struct {
 	err        error
 }
 
+// kindJumpKindsLoadedMsg is loadKindJumpKindsCmd's result (":" quick jump to
+// a kind): the same kind listing kindsLoadedMsg uses, but tagged separately
+// so Update doesn't mutate the real Kind column with it until the user
+// actually picks a kind — see openKindJumpForm.
+type kindJumpKindsLoadedMsg struct {
+	tabID     int
+	namespace string
+	kinds     []string
+	err       error
+}
+
 type entitySavedMsg struct {
 	tabID int
 	err   error

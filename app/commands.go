@@ -68,6 +68,17 @@ func loadRefPropertiesCmd(c *client.Client, tabID int, namespace, kind string) t
 	}
 }
 
+// loadKindJumpKindsCmd is loadKindsCmd's counterpart for ":" (quick jump to a
+// kind): same query.ListKinds call, tagged with kindJumpKindsLoadedMsg so
+// Update doesn't mutate the real Kind column with it — see
+// kindJumpKindsLoadedMsg.
+func loadKindJumpKindsCmd(c *client.Client, tabID int, namespace string) tea.Cmd {
+	return func() tea.Msg {
+		kinds, err := query.ListKinds(context.Background(), c, namespace)
+		return kindJumpKindsLoadedMsg{tabID: tabID, namespace: namespace, kinds: kinds, err: err}
+	}
+}
+
 func loadEntitiesCmd(c *client.Client, tabID int, namespace, kind, cursor string, appendPage bool, order *client.Order) tea.Cmd {
 	return func() tea.Msg {
 		page, err := query.ListEntitiesPage(context.Background(), c, namespace, kind, cursor, entityPageSize, order)

@@ -111,6 +111,15 @@ type tab struct {
 	refPropertyForm  *huh.Form
 	refProperty      string
 
+	// Quick jump to kind (":" in browse mode): kindJumpForm fills in
+	// kindJumpKind via a filterable pick-list, options loaded
+	// non-destructively into kindJumpKinds (not nav's real Kind column — the
+	// user may cancel). On completion, nav's real Kind/Entity columns are
+	// switched to the picked kind — see updateKindJumpForm.
+	kindJumpForm  *huh.Form
+	kindJumpKinds []string
+	kindJumpKind  string
+
 	chordG keymap.Chord
 	chordD keymap.Chord
 	chordY keymap.Chord

@@ -41,6 +41,7 @@ const (
 	screenOrder
 	screenRefKind
 	screenRefProperty
+	screenKindJump
 	screenHelp
 )
 
@@ -251,6 +252,21 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m.openRefKindForm(msg.kinds)
 
+	case kindJumpKindsLoadedMsg:
+		t, ok := m.tabByID(msg.tabID)
+		if !ok {
+			return m, nil
+		}
+		t.status = ""
+		if msg.err != nil {
+			t.err = msg.err
+			return m, nil
+		}
+		if msg.namespace != t.namespace {
+			return m, nil
+		}
+		return m.openKindJumpForm(msg.kinds)
+
 	case refPropertiesLoadedMsg:
 		t, ok := m.tabByID(msg.tabID)
 		if !ok {
@@ -342,6 +358,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateRefKindForm(msg)
 	case screenRefProperty:
 		return m.updateRefPropertyForm(msg)
+	case screenKindJump:
+		return m.updateKindJumpForm(msg)
 	}
 	return m, nil
 }
@@ -390,6 +408,8 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.updateRefKindForm(msg)
 	case screenRefProperty:
 		return m.updateRefPropertyForm(msg)
+	case screenKindJump:
+		return m.updateKindJumpForm(msg)
 	case screenConfirmDeleteEntity, screenConfirmDeleteItem, screenConfirmQuit, screenConfirmRefresh:
 		return m.updateConfirm(msg)
 	case screenConfirmClearBookmarks:
@@ -461,6 +481,8 @@ func (m *Model) viewBody() string {
 		return "Find references — target kind\n\n" + m.refKindForm.View()
 	case screenRefProperty:
 		return "Find references — property to match\n\n" + m.refPropertyForm.View()
+	case screenKindJump:
+		return m.kindJumpForm.View()
 	case screenConfirmDeleteEntity:
 		return "Delete entity " + entityLabel(m.nav.SelectedEntity()) + "? Press y to confirm, any other key to cancel."
 	case screenConfirmQuit:
@@ -677,6 +699,8 @@ Browse mode:
                  instead of clearing it (only when staying on the same kind)
   yy             copy the selected entity's key to the clipboard
   T              toggle table (spreadsheet) view of the current kind's entities
+  :              jump straight to a kind's entities in the current namespace,
+                 via a filterable picker
   ctrl+l         open bookmarks (jump to a bookmarked entity)
   q, ctrl+c      quit
   (right pane previews the highlighted entity's properties)
