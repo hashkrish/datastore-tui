@@ -1,7 +1,10 @@
 package panes
 
 import (
+	"strings"
 	"testing"
+
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/krishnan/datastore-tui/datastore/model"
 	"github.com/krishnan/datastore-tui/ui/nav"
@@ -113,5 +116,50 @@ func TestFormatBreadcrumb(t *testing.T) {
 	want := "[default]/Person/alice/address/tags[2]"
 	if got := FormatBreadcrumb("[default]", key, &path); got != want {
 		t.Fatalf("FormatBreadcrumb (nested) = %q, want %q", got, want)
+	}
+}
+
+func TestBlobPreview(t *testing.T) {
+	scope := model.Value{Kind: model.KindArray, ArrayValue: []model.Value{
+		model.BlobValueOf([]byte(`{"a":1}`)),
+		model.BlobValueOf([]byte{0x00, 0xff}),
+		model.StringValue("s"),
+	}}
+	rows, err := BuildRows(scope)
+	if err != nil {
+		t.Fatalf("BuildRows: %v", err)
+	}
+	if text, ok := BlobPreview(scope, rows, 0); !ok || text != "{\n  \"a\": 1\n}" {
+		t.Fatalf("BlobPreview(json) = %q, %v; want pretty JSON, true", text, ok)
+	}
+	for _, i := range []int{1, 2, 3} {
+		if _, ok := BlobPreview(scope, rows, i); ok {
+			t.Fatalf("BlobPreview(row %d) ok = true, want false", i)
+		}
+	}
+	entity := model.Value{Kind: model.KindEntity, EntityValue: &model.Entity{Properties: map[string]model.Value{
+		"b": model.BlobValueOf([]byte("hi")),
+	}}}
+	rows, _ = BuildRows(entity)
+	if _, ok := BlobPreview(entity, rows, 0); ok {
+		t.Fatalf("BlobPreview on entity scope ok = true, want false")
+	}
+}
+
+func TestWrapPreviewLine(t *testing.T) {
+	got := wrapPreviewLine(`    "k": "alpha beta gamma"`, 16)
+	want := []string{`    "k": "alpha`, `    beta gamma"`}
+	if len(got) != len(want) {
+		t.Fatalf("wrapPreviewLine = %q, want %q", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("wrapPreviewLine = %q, want %q", got, want)
+		}
+	}
+	for _, l := range wrapPreviewLine("  "+strings.Repeat("x", 30), 10) {
+		if ansi.StringWidth(l) > 10 {
+			t.Fatalf("wrapped line %q wider than 10", l)
+		}
 	}
 }

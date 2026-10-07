@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"strconv"
 	"time"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/charmbracelet/huh"
 	"github.com/krishnan/datastore-tui/datastore/model"
@@ -32,7 +30,7 @@ type FieldEditor struct {
 	lngVal    string
 	blobVal   string
 	// blobShowable is true when the blob's bytes decoded (see
-	// decodeBlobText) to displayable text rather than falling back to
+	// model.DecodeBlobText) to displayable text rather than falling back to
 	// base64 — Result() must mirror whichever path NewFieldEditor took.
 	blobShowable bool
 	keyKind      string
@@ -86,7 +84,7 @@ func NewFieldEditor(v model.Value, width int) (*FieldEditor, bool) {
 			huh.NewInput().Title("Longitude").Value(&e.lngVal).Validate(validateFloat),
 		))
 	case model.KindBlob:
-		if text, ok := decodeBlobText(v.BlobValue); ok {
+		if text, ok := model.DecodeBlobText(v.BlobValue); ok {
 			e.blobShowable = true
 			e.blobVal = text
 			e.form = huh.NewForm(huh.NewGroup(
@@ -247,26 +245,9 @@ func editorExtensionFor(s string) string {
 	return ""
 }
 
-// decodeBlobText decodes b to text for editing when it's displayable —
-// valid UTF-8 with no non-whitespace control characters — pretty-printing
-// it with a two-space indent first if it's valid JSON. ok is false for
-// binary data, which the caller falls back to editing as base64.
-func decodeBlobText(b []byte) (text string, ok bool) {
-	if !utf8.Valid(b) || !isPrintableText(b) {
-		return "", false
-	}
-	if json.Valid(b) {
-		var buf bytes.Buffer
-		if err := json.Indent(&buf, b, "", "  "); err == nil {
-			return buf.String(), true
-		}
-	}
-	return string(b), true
-}
-
-// encodeBlobText reverses decodeBlobText for saving: valid JSON is compacted
+// encodeBlobText reverses model.DecodeBlobText for saving: valid JSON is compacted
 // back down before being stored as the blob's raw bytes, since the
-// two-space indent decodeBlobText applies is purely a display convenience.
+// two-space indent model.DecodeBlobText applies is purely a display convenience.
 func encodeBlobText(s string) []byte {
 	if json.Valid([]byte(s)) {
 		var buf bytes.Buffer
@@ -283,18 +264,4 @@ func blobEditTitle(text string) string {
 		return "Blob value (JSON)"
 	}
 	return "Blob value (text)"
-}
-
-// isPrintableText reports whether b contains only displayable characters —
-// any control character other than \n, \r, or \t disqualifies it as binary.
-func isPrintableText(b []byte) bool {
-	for _, r := range string(b) {
-		if r == '\n' || r == '\r' || r == '\t' {
-			continue
-		}
-		if unicode.IsControl(r) {
-			return false
-		}
-	}
-	return true
 }

@@ -569,10 +569,11 @@ func (m *Model) viewQueryPastePicker(height int) string {
 
 func (m *Model) viewDetailScreen(height int) string {
 	breadcrumb := panes.FormatBreadcrumb(m.namespace, m.currentEntity.Key, &m.detailPath)
-	_, rows, err := m.currentScope()
+	scope, rows, err := m.currentScope()
 	if err != nil {
 		return breadcrumb + "\n\n" + err.Error()
 	}
+	preview, hasPreview := panes.BlobPreview(scope, rows, m.detailSelected)
 	// Only reserve a separator line when something (a form or confirm
 	// prompt) is appended below the row list; plain viewing uses the full
 	// available height for rows.
@@ -581,7 +582,7 @@ func (m *Model) viewDetailScreen(height int) string {
 	case screenEditLeaf, screenNewItemValue, screenNewItemType, screenConfirmDeleteItem, screenConfirmRefresh:
 		reserve = 1
 	}
-	base := panes.RenderDetail(breadcrumb, rows, m.detailSelected, m.width, height-reserve)
+	base := panes.RenderDetail(breadcrumb, rows, m.detailSelected, preview, hasPreview, m.width, height-reserve)
 
 	switch m.screen {
 	case screenEditLeaf, screenNewItemValue:
