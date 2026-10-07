@@ -35,7 +35,9 @@ func clearADCEnv(t *testing.T) {
 		"CLOUDSDK_CONFIG",
 	} {
 		t.Setenv(k, "")
-		os.Unsetenv(k)
+		if err := os.Unsetenv(k); err != nil {
+			t.Fatalf("Unsetenv(%s): %v", k, err)
+		}
 	}
 }
 
