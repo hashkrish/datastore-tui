@@ -41,6 +41,8 @@ type BrowseKeyMap struct {
 	Yank                     key.Binding // first "y" of "yy": copy the selected entity's key
 	ToggleTable              key.Binding // T: toggle table (spreadsheet) view of the current kind's entities
 	QuickJumpKind            key.Binding // ": jump straight to a kind's entities in the current namespace, via a filterable picker
+	OpenWeb                  key.Binding // W: open the current kind's query in the Cloud Console
+	YankURL                  key.Binding // "u" of "yu": copy the Cloud Console URL "W" would open
 	Quit                     key.Binding
 	Help                     key.Binding
 	PendingG                 key.Binding // first "g" of "gg"
@@ -72,6 +74,8 @@ func DefaultBrowseKeyMap() BrowseKeyMap {
 		Yank:              key.NewBinding(key.WithKeys("y"), key.WithHelp("yy", "copy key")),
 		ToggleTable:       key.NewBinding(key.WithKeys("T"), key.WithHelp("T", "table view")),
 		QuickJumpKind:     key.NewBinding(key.WithKeys(":"), key.WithHelp(":", "jump to kind")),
+		OpenWeb:           key.NewBinding(key.WithKeys("W"), key.WithHelp("W", "open query in console")),
+		YankURL:           key.NewBinding(key.WithKeys("u"), key.WithHelp("yu", "copy console URL")),
 		Quit:              key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
 		Help:              key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 	}
@@ -96,6 +100,8 @@ type DetailKeyMap struct {
 	FindReferences           key.Binding // ctrl+f: query another kind by this property's value (clears any active query)
 	FindReferencesAdd        key.Binding // F: same, but AND-combines onto the active query instead of clearing it
 	Yank                     key.Binding // first "y" of "yy": copy the selected property's value
+	OpenWeb                  key.Binding // W: open the current entity in the Cloud Console
+	YankURL                  key.Binding // "u" of "yu": copy the Cloud Console URL "W" would open
 	Quit                     key.Binding
 	Help                     key.Binding
 }
@@ -122,6 +128,8 @@ func DefaultDetailKeyMap() DetailKeyMap {
 		FindReferences:    key.NewBinding(key.WithKeys("ctrl+f"), key.WithHelp("ctrl+f", "find references")),
 		FindReferencesAdd: key.NewBinding(key.WithKeys("F"), key.WithHelp("F", "find references (add)")),
 		Yank:              key.NewBinding(key.WithKeys("y"), key.WithHelp("yy", "copy value")),
+		OpenWeb:           key.NewBinding(key.WithKeys("W"), key.WithHelp("W", "open in console")),
+		YankURL:           key.NewBinding(key.WithKeys("u"), key.WithHelp("yu", "copy console URL")),
 		Quit:              key.NewBinding(key.WithKeys("q", "esc"), key.WithHelp("q/esc", "back to browse")),
 		Help:              key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 	}
@@ -138,6 +146,8 @@ type TableKeyMap struct {
 	HalfPageUp, HalfPageDown key.Binding
 	Open                     key.Binding // enter: open the selected row's entity in detail view
 	Yank                     key.Binding // first "y" of "yy": copy the selected cell's value
+	OpenWeb                  key.Binding // W: open the selected row's entity in the Cloud Console
+	YankURL                  key.Binding // "u" of "yu": copy the Cloud Console URL "W" would open
 	FilterColumns            key.Binding // *: filter which columns (properties) are shown, by name
 	Search                   key.Binding // /: search every visible cell's value, jump to the first match
 	NextMatch                key.Binding // n: jump to the next search match
@@ -161,6 +171,8 @@ func DefaultTableKeyMap() TableKeyMap {
 		HalfPageDown:  key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("ctrl+d", "half page down")),
 		Open:          key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open entity")),
 		Yank:          key.NewBinding(key.WithKeys("y"), key.WithHelp("yy", "copy cell value")),
+		OpenWeb:       key.NewBinding(key.WithKeys("W"), key.WithHelp("W", "open in console")),
+		YankURL:       key.NewBinding(key.WithKeys("u"), key.WithHelp("yu", "copy console URL")),
 		FilterColumns: key.NewBinding(key.WithKeys("*"), key.WithHelp("*", "filter columns")),
 		Search:        key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search cells")),
 		NextMatch:     key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "next match")),

@@ -27,7 +27,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	m := app.New(cfg.Client(), cfg.ReadOnly)
+	m := app.New(cfg.Client(), cfg.ReadOnly, cfg.ConsoleProject())
 	if _, err := tea.NewProgram(m, tea.WithAltScreen()).Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "datastore-tui:", err)
 		os.Exit(1)

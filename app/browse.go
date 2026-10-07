@@ -103,6 +103,9 @@ func (m *Model) updateBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, km.QuickJumpKind):
 		return m.startKindJump()
 
+	case key.Matches(msg, km.OpenWeb):
+		return m.webFromBrowse(m.openWeb)
+
 	case key.Matches(msg, km.Add):
 		if m.nav.Focus == nav.ColumnEntity {
 			if m.blockReadOnly() {
@@ -135,13 +138,21 @@ func (m *Model) updateBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case key.Matches(msg, km.Yank):
-		if m.nav.Focus != nav.ColumnEntity {
-			return m, nil
-		}
+		// Armed in every column, since "yu" (unlike "yy") works from the
+		// Kind column too.
 		if m.chordY.Complete('y') {
+			if m.nav.Focus != nav.ColumnEntity {
+				return m, nil
+			}
 			return m.yankSelectedKey()
 		}
 		m.chordY.Arm('y')
+		return m, nil
+
+	case key.Matches(msg, km.YankURL):
+		if m.chordY.Complete('y') {
+			return m.webFromBrowse(m.copyWebURL)
+		}
 		return m, nil
 
 	default:

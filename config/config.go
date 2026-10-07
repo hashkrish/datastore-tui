@@ -94,6 +94,15 @@ func (c Config) Client() *client.Client {
 	return client.New(client.Config{ProjectID: c.ProjectID, Endpoint: c.Endpoint, TokenSource: c.TokenSource})
 }
 
+// ConsoleProject returns the project to open Cloud Console links in, or ""
+// when targeting the emulator, which has no console.
+func (c Config) ConsoleProject() string {
+	if c.TokenSource == nil {
+		return ""
+	}
+	return c.ProjectID
+}
+
 func (c Config) String() string {
 	return fmt.Sprintf("project=%s endpoint=%s", c.ProjectID, c.Endpoint)
 }

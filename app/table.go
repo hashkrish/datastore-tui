@@ -107,6 +107,18 @@ func (m *Model) updateTable(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.chordY.Reset()
 		return m.openEntityDetailFromTable(entities, cols)
 
+	case key.Matches(msg, km.OpenWeb):
+		m.chordG.Reset()
+		m.chordY.Reset()
+		return m.webForEntity(m.selectedTableEntity(entities), m.openWeb)
+
+	case key.Matches(msg, km.YankURL):
+		m.chordG.Reset()
+		if m.chordY.Complete('y') {
+			return m.webForEntity(m.selectedTableEntity(entities), m.copyWebURL)
+		}
+		return m, nil
+
 	case key.Matches(msg, km.Yank):
 		m.chordG.Reset()
 		if m.chordY.Complete('y') {
@@ -305,6 +317,15 @@ func (m *Model) clampTableScroll(entityCount int) {
 // column belongs to, not row 0, so "enter" on a cell reads as "inspect this
 // value" rather than dropping the user back at the top of the property
 // list.
+// selectedTableEntity returns the table view's highlighted row's entity, or
+// nil if there's none.
+func (m *Model) selectedTableEntity(entities []*model.Entity) *model.Entity {
+	if m.tableState == nil || m.tableState.Row < 0 || m.tableState.Row >= len(entities) {
+		return nil
+	}
+	return entities[m.tableState.Row]
+}
+
 func (m *Model) openEntityDetailFromTable(entities []*model.Entity, cols []string) (tea.Model, tea.Cmd) {
 	if m.tableState == nil || m.tableState.Row < 0 || m.tableState.Row >= len(entities) {
 		return m, nil

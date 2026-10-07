@@ -135,6 +135,16 @@ func (m *Model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.chordD.Arm('d')
 		return m, nil
 
+	case key.Matches(msg, km.OpenWeb):
+		m.chordY.Reset()
+		return m.webForEntity(m.currentEntity, m.openWeb)
+
+	case key.Matches(msg, km.YankURL):
+		if m.chordY.Complete('y') {
+			return m.webForEntity(m.currentEntity, m.copyWebURL)
+		}
+		return m, nil
+
 	case key.Matches(msg, km.Yank):
 		if m.chordY.Complete('y') {
 			return m.yankSelectedValue()

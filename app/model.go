@@ -66,6 +66,10 @@ type Model struct {
 	client   *client.Client
 	readOnly bool // disables every mutating action; see blockReadOnly
 
+	// consoleProject is the GCP project "W" opens Cloud Console links in;
+	// "" against the emulator, which has no console (see webUnavailable).
+	consoleProject string
+
 	bookmarks        []bookmark
 	bookmarkCursor   int
 	bookmarkEntities map[string]*model.Entity // key.String() -> fetched entity, nil map while loading
@@ -83,16 +87,19 @@ type Model struct {
 // New builds a fresh Model against c, with a single starting tab. When
 // readOnly is true, every mutating action (new/delete entity,
 // retype/add/delete property, save) is blocked; see blockReadOnly.
-func New(c *client.Client, readOnly bool) *Model {
+// consoleProject enables "W" (open in the Cloud Console) for that project;
+// pass "" when targeting the emulator.
+func New(c *client.Client, readOnly bool, consoleProject string) *Model {
 	first := newTab(1)
 	return &Model{
-		client:    c,
-		readOnly:  readOnly,
-		bookmarks: loadBookmarks(),
-		tabs:      []*tab{first},
-		active:    0,
-		tab:       first,
-		nextTabID: 2,
+		client:         c,
+		readOnly:       readOnly,
+		consoleProject: consoleProject,
+		bookmarks:      loadBookmarks(),
+		tabs:           []*tab{first},
+		active:         0,
+		tab:            first,
+		nextTabID:      2,
 	}
 }
 
@@ -700,6 +707,9 @@ Browse mode:
                  instead of clearing it (only when staying on the same kind)
   yy             copy the selected entity's key to the clipboard
   T              toggle table (spreadsheet) view of the current kind's entities
+  W              open the current kind's query (with its = filters on
+                 string/key values) in the Cloud Console (not the emulator)
+  yu             copy that Cloud Console URL to the clipboard
   :              jump straight to a kind's entities in the current namespace,
                  via a filterable picker
   ctrl+l         open bookmarks (jump to a bookmarked entity)
@@ -713,6 +723,8 @@ Table view (T):
   ctrl+u/ctrl+d  half page up/down
   enter          open the selected row's entity in detail view
   yy             copy the selected cell's value to the clipboard
+  W              open the selected row's entity in the Cloud Console
+  yu             copy that Cloud Console URL to the clipboard
   *              filter which columns (properties) are shown, by name
   /              search every visible cell's value, jump to the first match
   n / N          jump to the next / previous search match
@@ -753,6 +765,8 @@ Detail mode (viewing/editing an entity):
   F              same as ctrl+f, but AND-combines onto the active query
                  instead of clearing it (only when staying on the same kind)
   yy             copy the selected property's value to the clipboard
+  W              open this entity in the Cloud Console (not the emulator)
+  yu             copy that Cloud Console URL to the clipboard
   ctrl+b         bookmark/unbookmark the current entity
   ctrl+l         open bookmarks (jump to a bookmarked entity)
   w              save pending edits

@@ -44,7 +44,7 @@ func drainN(t *testing.T, m *Model, cmd tea.Cmd, n int) *Model {
 // screenRefProperty were missing from that forwarding switch when first
 // added (see the switch above handleKey in model.go).
 func TestRefKindForm_EnterCompletesForm(t *testing.T) {
-	m := New(nil, false)
+	m := New(nil, false, "")
 	m.width, m.height = 80, 24
 
 	mdl, initCmd := m.openRefKindForm([]string{"Alpha", "Beta", "Gamma"})
